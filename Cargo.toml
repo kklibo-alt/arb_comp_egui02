@@ -1,5 +1,5 @@
 [workspace]
-members = ["arb_comp05", "egui_hex02"]
+members = ["arb_comp06", "egui_hex07"]
 resolver = "2"
 
 [profile.release]

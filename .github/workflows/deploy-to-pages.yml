@@ -22,11 +22,11 @@ jobs:
     - name: Cargo build
       run: cargo build --release --verbose
     - name: Trunk build
-      run: trunk build egui_hex02/index.html --release --public-url="/arb_comp_egui01"
+      run: trunk build egui_hex07/index.html --release --public-url="/arb_comp_egui02"
     - name: Upload artifact
       uses: actions/upload-pages-artifact@v3
       with:
-        path: ./egui_hex02/dist
+        path: ./egui_hex07/dist
   
   # Deploy job
   deploy:

@@ -7,15 +7,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'arb_comp04'",
+            "name": "Debug executable 'arb_comp06'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=arb_comp04",
-                    "--package=arb_comp04"
+                    "--bin=arb_comp06",
+                    "--package=arb_comp06"
                 ],
                 "filter": {
-                    "name": "arb_comp04",
+                    "name": "arb_comp06",
                     "kind": "bin"
                 }
             },
@@ -25,16 +25,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'arb_comp04'",
+            "name": "Debug unit tests in executable 'arb_comp06'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=arb_comp04",
-                    "--package=arb_comp04"
+                    "--bin=arb_comp06",
+                    "--package=arb_comp06"
                 ],
                 "filter": {
-                    "name": "arb_comp04",
+                    "name": "arb_comp06",
                     "kind": "bin"
                 }
             },

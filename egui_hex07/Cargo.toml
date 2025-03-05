@@ -1,5 +1,5 @@
 [package]
-name = "egui_hex01"
+name = "egui_hex07"
 version = "0.1.0"
 authors = ["kklibo"]
 edition = "2021"
@@ -20,7 +20,7 @@ eframe = { version = "0.27.0", default-features = false, features = [
 ] }
 log = "0.4"
 
-arb_comp05 = {path = "../arb_comp05"}
+arb_comp06 = {path = "../arb_comp06"}
 
 # You only need serde if you want app persistence:
 serde = { version = "1", features = ["derive"] }

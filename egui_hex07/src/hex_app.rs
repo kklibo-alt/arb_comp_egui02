@@ -1,5 +1,5 @@
 use crate::diff::{self, HexCell};
-use arb_comp05::{bpe::Bpe, matcher, test_utils};
+use arb_comp06::{bpe::Bpe, matcher, test_utils};
 use egui::{Color32, RichText, Ui};
 use egui_extras::{Column, TableBody, TableBuilder, TableRow};
 use rand::Rng;
