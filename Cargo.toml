@@ -1,0 +1,10 @@
+[workspace]
+members = ["arb_comp05", "egui_hex02"]
+resolver = "2"
+
+[profile.release]
+opt-level = 2 # fast and small wasm
+
+# Optimize all dependencies even in debug builds:
+[profile.dev.package."*"]
+opt-level = 2
