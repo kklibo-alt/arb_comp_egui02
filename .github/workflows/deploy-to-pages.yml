@@ -22,7 +22,9 @@ jobs:
     - name: Cargo build
       run: cargo build --release --verbose
     - name: Trunk build
-      run: trunk build egui_hex07/index.html --release --public-url="/arb_comp_egui02"
+      run: |
+        cd egui_hex07
+        trunk build --release --public-url="/arb_comp_egui02"
     - name: Upload artifact
       uses: actions/upload-pages-artifact@v3
       with:
