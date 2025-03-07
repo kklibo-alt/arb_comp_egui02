@@ -86,27 +86,35 @@ impl HexApp {
             ui.heading("address");
         });
         header.col(|ui| {
-            ui.heading(self.source_name0.as_ref().unwrap_or(&no_pattern));
-            let text = drop_select_text(self.file_drop_target == WhichFile::File0);
-            ui.selectable_value(&mut self.file_drop_target, WhichFile::File0, text)
-                .highlight();
-            if ui.button("randomize").clicked() {
-                self.pattern0 = Some(random_pattern());
-                self.source_name0 = Some("random".to_string());
-                self.update_diffs();
-            }
+            ui.vertical(|ui| {
+                ui.heading(self.source_name0.as_ref().unwrap_or(&no_pattern));
+                ui.horizontal(|ui| {
+                    let text = drop_select_text(self.file_drop_target == WhichFile::File0);
+                    ui.selectable_value(&mut self.file_drop_target, WhichFile::File0, text)
+                        .highlight();
+                    if ui.button("randomize").clicked() {
+                        self.pattern0 = Some(random_pattern());
+                        self.source_name0 = Some("random".to_string());
+                        self.update_diffs();
+                    }
+                });
+            });
         });
         header.col(|_| {});
         header.col(|ui| {
-            ui.heading(self.source_name1.as_ref().unwrap_or(&no_pattern));
-            let text = drop_select_text(self.file_drop_target == WhichFile::File1);
-            ui.selectable_value(&mut self.file_drop_target, WhichFile::File1, text)
-                .highlight();
-            if ui.button("randomize").clicked() {
-                self.pattern1 = Some(random_pattern());
-                self.source_name1 = Some("random".to_string());
-                self.update_diffs();
-            }
+            ui.vertical(|ui| {
+                ui.heading(self.source_name1.as_ref().unwrap_or(&no_pattern));
+                ui.horizontal(|ui| {
+                    let text = drop_select_text(self.file_drop_target == WhichFile::File1);
+                    ui.selectable_value(&mut self.file_drop_target, WhichFile::File1, text)
+                        .highlight();
+                    if ui.button("randomize").clicked() {
+                        self.pattern1 = Some(random_pattern());
+                        self.source_name1 = Some("random".to_string());
+                        self.update_diffs();
+                    }
+                });
+            });
         });
     }
 
