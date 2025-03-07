@@ -209,7 +209,27 @@ impl eframe::App for HexApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.input(|i| {
             if let Some(dropped_file) = i.raw.dropped_files.first() {
-                if let Some(bytes) = &dropped_file.bytes {
+                // This should only be Some when running as a native app.
+                if let Some(path) = &dropped_file.path {
+                    match self.file_drop_target {
+                        WhichFile::File0 => {
+                            self.source_name0 = Some(path.to_string_lossy().to_string());
+                            self.pattern0 = std::fs::read(path).ok();
+                            if self.pattern0.is_none() {
+                                log::error!("failed to read file: {:?}", path);
+                            }
+                        }
+                        WhichFile::File1 => {
+                            self.source_name1 = Some(path.to_string_lossy().to_string());
+                            self.pattern1 = std::fs::read(path).ok();
+                            if self.pattern1.is_none() {
+                                log::error!("failed to read file: {:?}", path);
+                            }
+                        }
+                    }
+                }
+                // This should only be Some when running as a web app.
+                else if let Some(bytes) = &dropped_file.bytes {
                     match self.file_drop_target {
                         WhichFile::File0 => {
                             self.pattern0 = Some(bytes.to_vec());
@@ -220,8 +240,8 @@ impl eframe::App for HexApp {
                             self.source_name1 = Some(dropped_file.name.clone());
                         }
                     }
-                    self.update_diffs();
                 }
+                self.update_diffs();
             }
         });
 
