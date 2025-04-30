@@ -1,6 +1,7 @@
 use crate::recode::{condense, expand, to_bytes, to_ids};
 use crate::token::{find_most_common_duplicate_id_pair, merge, Token, TokenId};
 use indexmap::IndexMap;
+use keyed_priority_queue::KeyedPriorityQueue;
 
 pub struct Bpe {
     ids_to_tokens: IndexMap<TokenId, Token>,
@@ -52,15 +53,77 @@ impl Bpe {
         bpe
     }
 
-    // first attempt: ignore token repetition block overcounting for now
     pub fn new_faster(data: &[&[u8]]) -> Self {
         let mut bpe = Self {
             ids_to_tokens: IndexMap::new(),
             tokens_to_ids: IndexMap::new(),
         };
 
-        
+        (0..=u8::MAX).for_each(|x| bpe.add_id(TokenId(x as usize), Token::Byte(x)));
 
+        let mut patterns = data.iter().map(|x| bpe.encode(x)).collect::<Vec<_>>();
+        let mut pair_counts: IndexMap<(TokenId, TokenId), usize> = IndexMap::new();
+
+        // Count initial pairs
+        for pattern in &patterns {
+            for window in pattern.windows(2) {
+                let pair = (window[0], window[1]);
+                *pair_counts.entry(pair).or_insert(0) += 1;
+            }
+        }
+
+        // Use a priority queue to store pairs by frequency (descending)
+        let mut pq = KeyedPriorityQueue::new();
+        for (pair, &count) in &pair_counts {
+            if count > 1 {
+                pq.push(*pair, count);
+            }
+        }
+
+        while let Some(((id0, id1), _count)) = pq.pop() {
+            let new_id = bpe.ids_to_tokens.len();
+            bpe.add_id(TokenId(new_id), Token::Merge(id0, id1));
+
+            let merge_if = |current_id, next_id| {
+                if current_id == id0 && next_id == id1 {
+                    Some(TokenId(new_id))
+                } else {
+                    None
+                }
+            };
+
+            // Update patterns and pair counts
+            let mut new_patterns = Vec::new();
+            for pattern in &patterns {
+                let merged = merge(pattern.iter().copied(), merge_if);
+                new_patterns.push(merged.clone());
+                // Update pair counts for the new pattern
+                for window in merged.windows(2) {
+                    let pair = (window[0], window[1]);
+                    *pair_counts.entry(pair).or_insert(0) += 1;
+                }
+                // Remove old pair counts
+                for window in pattern.windows(2) {
+                    let pair = (window[0], window[1]);
+                    if let Some(count) = pair_counts.get_mut(&pair) {
+                        *count -= 1;
+                        if *count == 0 {
+                            pair_counts.remove(&pair);
+                        }
+                    }
+                }
+            }
+            patterns = new_patterns;
+
+            // Update priority queue with new counts
+            for (pair, &count) in pair_counts.iter() {
+                if count > 1 {
+                    pq.set_priority(*pair, count);
+                } else {
+                    pq.remove(pair);
+                }
+            }
+        }
 
         bpe
     }
