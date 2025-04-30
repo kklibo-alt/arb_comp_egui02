@@ -52,6 +52,19 @@ impl Bpe {
         bpe
     }
 
+    // first attempt: ignore token repetition block overcounting for now
+    pub fn new_faster(data: &[&[u8]]) -> Self {
+        let mut bpe = Self {
+            ids_to_tokens: IndexMap::new(),
+            tokens_to_ids: IndexMap::new(),
+        };
+
+        
+
+
+        bpe
+    }
+
     pub fn encode(&self, data: &[u8]) -> Vec<TokenId> {
         let pattern = to_ids(data, &self.tokens_to_ids);
         let merge_if = |id0, id1| self.tokens_to_ids.get(&Token::Merge(id0, id1)).copied();
