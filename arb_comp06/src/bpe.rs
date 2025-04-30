@@ -1,6 +1,7 @@
 use crate::recode::{condense, expand, to_bytes, to_ids};
 use crate::token::{find_most_common_duplicate_id_pair, merge, Token, TokenId};
 use indexmap::IndexMap;
+use std::collections::HashMap;
 
 pub struct Bpe {
     ids_to_tokens: IndexMap<TokenId, Token>,
@@ -22,6 +23,9 @@ impl Bpe {
     }
 
     pub fn new(data: &[&[u8]]) -> Self {
+
+        return Self:: new_faster(data);
+
         let mut bpe = Self {
             ids_to_tokens: IndexMap::new(),
             tokens_to_ids: IndexMap::new(),
@@ -59,8 +63,51 @@ impl Bpe {
             tokens_to_ids: IndexMap::new(),
         };
 
-        
+        (0..=u8::MAX).for_each(|x| bpe.add_id(TokenId(x as usize), Token::Byte(x)));
 
+        let mut patterns: Vec<Vec<TokenId>> = data.iter().map(|x| to_ids(x, &bpe.tokens_to_ids)).collect();
+
+        loop {
+            let mut pair_counts: HashMap<(TokenId, TokenId), usize> = HashMap::new();
+            for pattern in &patterns {
+                for window in pattern.windows(2) {
+                    if let [id0, id1] = window {
+                        *pair_counts.entry((*id0, *id1)).or_insert(0) += 1;
+                    }
+                }
+            }
+
+            let most_common_pair = pair_counts
+                .into_iter()
+                .max_by_key(|&(_, count)| count);
+
+            if let Some(((id0, id1), count)) = most_common_pair {
+                if count > 1 { // Only merge if the pair appears more than once
+                    let new_id_val = bpe.ids_to_tokens.len();
+                    let new_id = TokenId(new_id_val);
+                    bpe.add_id(new_id, Token::Merge(id0, id1));
+
+                    let merge_if = |current_id, next_id| {
+                        if current_id == id0 && next_id == id1 {
+                            Some(new_id)
+                        } else {
+                            None
+                        }
+                    };
+
+                    patterns = patterns
+                        .iter()
+                        .map(|pattern| merge(pattern.iter().copied(), merge_if))
+                        .collect();
+                } else {
+                    // No pair appears more than once, stop merging
+                    break;
+                }
+            } else {
+                // No pairs found at all, stop merging
+                break;
+            }
+        }
 
         bpe
     }
