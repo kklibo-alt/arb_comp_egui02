@@ -12,12 +12,34 @@ pub enum Token {
     Merge(TokenId, TokenId),
 }
 
+/// Count pairs of adjacent `TokenIds` in `ids`.
 fn count_id_pairs(ids: &[TokenId]) -> IndexMap<(TokenId, TokenId), usize> {
     let mut counts = IndexMap::new();
 
-    ids.iter().pairs().for_each(|(id0, id1)| {
-        increment(&mut counts, (*id0, *id1));
-    });
+    let mut previous_id = Option::<TokenId>::None;
+    let mut skip = false;
+
+    for &id in ids {
+        if let Some(prev) = previous_id {
+            if prev == id {
+                // In a contiguous subsequence of the same TokenId, skip every second pair.
+                // This prevents overlapping instances from being counted.
+                //
+                // If this was not done, the pair count would be higher than the number of
+                // replacements that would actually happen if the all pairs were replaced
+                // by a new merge token.
+                if !skip {
+                    increment(&mut counts, (prev, id));
+                }
+                skip = !skip;
+            } else {
+                increment(&mut counts, (prev, id));
+                // Any contiguous subsequence has ended, so reset the skip flag.
+                skip = false;
+            }
+        }
+        previous_id = Some(id);
+    }
 
     counts
 }
@@ -98,8 +120,32 @@ mod tests {
 
         let pattern = vec![TokenId(0), TokenId(0), TokenId(0)];
         let result = count_id_pairs(&pattern);
-        //should there only be 1 here?
+        assert_eq!(result, IndexMap::from([((TokenId(0), TokenId(0)), 1)]));
+
+        let pattern = vec![TokenId(0), TokenId(0), TokenId(0), TokenId(0)];
+        let result = count_id_pairs(&pattern);
         assert_eq!(result, IndexMap::from([((TokenId(0), TokenId(0)), 2)]));
+
+        let pattern = vec![
+            TokenId(1),
+            TokenId(0),
+            TokenId(0),
+            TokenId(0),
+            TokenId(1),
+            TokenId(0),
+            TokenId(0),
+            TokenId(0),
+            TokenId(1),
+        ];
+        let result = count_id_pairs(&pattern);
+        assert_eq!(
+            result,
+            IndexMap::from([
+                ((TokenId(1), TokenId(0)), 2),
+                ((TokenId(0), TokenId(1)), 2),
+                ((TokenId(0), TokenId(0)), 2)
+            ])
+        );
     }
 
     #[test]
@@ -179,5 +225,13 @@ mod tests {
 
         let result = merge_tester(&pattern, TokenId(0), TokenId(5), TokenId(4));
         assert_eq!(result, pattern);
+
+        let result = merge_tester(
+            &[TokenId(0), TokenId(0), TokenId(0), TokenId(0)],
+            TokenId(0),
+            TokenId(0),
+            TokenId(1),
+        );
+        assert_eq!(result, vec![TokenId(1), TokenId(1),]);
     }
 }
