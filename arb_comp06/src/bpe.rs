@@ -70,8 +70,8 @@ impl Bpe {
             return bpe;
         }
 
-        // Build initial pair counts using a HashMap
-        let mut pair_locations: HashMap<(TokenId, TokenId), Vec<(usize, usize)>> = HashMap::new();
+        // Build initial pair counts using a IndexMap to maintain insertion order
+        let mut pair_locations: IndexMap<(TokenId, TokenId), Vec<(usize, usize)>> = IndexMap::new();
         let mut all_pairs = KeyedPriorityQueue::new();
         
         // Track valid positions in each pattern
