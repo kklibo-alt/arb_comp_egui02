@@ -64,63 +64,53 @@ impl Bpe {
         // Initialize with byte tokens
         (0..=u8::MAX).for_each(|x| bpe.add_id(TokenId(x as usize), Token::Byte(x)));
 
-        // Convert all data to token IDs
-        let mut patterns = data.iter().map(|x| bpe.encode(x)).collect::<Vec<_>>();
-        if patterns.is_empty() {
+        // Return early if no data to process
+        if data.is_empty() {
             return bpe;
         }
 
-        // Build initial pair counts using a IndexMap to maintain insertion order
+        // Convert data to token IDs
+        let mut patterns = data.iter().map(|x| bpe.encode(x)).collect::<Vec<_>>();
+        
+        // Track valid positions and initialize pair tracking structures
+        let mut valid_positions = patterns.iter().map(|p| vec![true; p.len()]).collect::<Vec<_>>();
         let mut pair_locations: IndexMap<(TokenId, TokenId), Vec<(usize, usize)>> = IndexMap::new();
         let mut all_pairs = KeyedPriorityQueue::new();
-        
-        // Track valid positions in each pattern
-        let mut valid_positions: Vec<Vec<bool>> = patterns
-            .iter()
-            .map(|pattern| vec![true; pattern.len()])
-            .collect();
 
-        // First pass: collect all pairs and their locations
+        // Collect initial pairs and their occurrences
         for (pattern_idx, pattern) in patterns.iter().enumerate() {
-            if pattern.len() < 2 {
-                continue;
-            }
-
-            for i in 0..pattern.len() - 1 {
+            for i in 0..pattern.len().saturating_sub(1) {
                 let pair = (pattern[i], pattern[i + 1]);
-                pair_locations
-                    .entry(pair)
-                    .or_default()
-                    .push((pattern_idx, i));
+                pair_locations.entry(pair).or_default().push((pattern_idx, i));
             }
         }
 
-        // Initialize the priority queue with pair counts
+        // Add pairs with multiple occurrences to the priority queue
         for (pair, locations) in &pair_locations {
             if locations.len() > 1 {
                 all_pairs.push(*pair, locations.len());
             }
         }
 
-        // Main loop: find the most frequent pair and merge it
+        // Main BPE loop: iteratively merge the most frequent pair
         while let Some((pair, count)) = all_pairs.pop() {
             if count <= 1 {
                 break;
             }
 
+            // Create new token from the pair
             let (id0, id1) = pair;
             let new_id = TokenId(bpe.ids_to_tokens.len());
             bpe.add_id(new_id, Token::Merge(id0, id1));
 
-            // Apply the merge to all patterns
-            let mut locations_to_update = Vec::new();
+            // Process all occurrences of this pair
             let locations = pair_locations.remove(&pair).unwrap_or_default();
+            let mut positions_to_update = Vec::new();
+            let mut overlapping_pairs: IndexMap<(TokenId, TokenId), Vec<(usize, usize)>> = IndexMap::new();
 
-            // Track overlapping pairs that need their counts decremented
-            let mut overlapping_pairs_to_update: IndexMap<(TokenId, TokenId), Vec<(usize, usize)>> = IndexMap::new();
-
+            // Apply merges and track affected positions
             for &(pattern_idx, pos) in &locations {
-                // Skip if positions are no longer valid or don't match the pair
+                // Skip invalid positions
                 if pos + 1 >= patterns[pattern_idx].len() || 
                    !valid_positions[pattern_idx][pos] ||
                    !valid_positions[pattern_idx][pos + 1] ||
@@ -129,48 +119,41 @@ impl Bpe {
                     continue;
                 }
 
-                // Check for overlapping pairs before the current position
+                // Track overlapping pairs
                 if pos > 0 && valid_positions[pattern_idx][pos - 1] {
-                    let prev_id = patterns[pattern_idx][pos - 1];
-                    let overlap_pair = (prev_id, id0);
-                    overlapping_pairs_to_update.entry(overlap_pair)
-                        .or_default()
-                        .push((pattern_idx, pos - 1));
+                    let prev_pair = (patterns[pattern_idx][pos - 1], id0);
+                    overlapping_pairs.entry(prev_pair).or_default().push((pattern_idx, pos - 1));
                 }
-
-                // Check for overlapping pairs after the current position
+                
                 if pos + 2 < patterns[pattern_idx].len() && valid_positions[pattern_idx][pos + 2] {
-                    let next_id = patterns[pattern_idx][pos + 2];
-                    let overlap_pair = (id1, next_id);
-                    overlapping_pairs_to_update.entry(overlap_pair)
-                        .or_default()
-                        .push((pattern_idx, pos + 1));
+                    let next_pair = (id1, patterns[pattern_idx][pos + 2]);
+                    overlapping_pairs.entry(next_pair).or_default().push((pattern_idx, pos + 1));
                 }
 
-                // Apply the merge: replace first token with new_id and mark second token as invalid
+                // Apply the merge
                 patterns[pattern_idx][pos] = new_id;
                 valid_positions[pattern_idx][pos + 1] = false;
 
-                // Collect positions that need updating for new pairs
+                // Track positions that need new pairs to be formed
                 if pos > 0 && valid_positions[pattern_idx][pos - 1] {
-                    locations_to_update.push((pattern_idx, pos - 1));
+                    positions_to_update.push((pattern_idx, pos - 1));
                 }
                 if pos + 2 < patterns[pattern_idx].len() && valid_positions[pattern_idx][pos + 2] {
-                    locations_to_update.push((pattern_idx, pos));
+                    positions_to_update.push((pattern_idx, pos));
                 }
             }
 
-            // Update counts for overlapping pairs
-            for (overlap_pair, positions) in overlapping_pairs_to_update {
+            // Decrement counts of overlapping pairs
+            for (overlap_pair, positions) in overlapping_pairs {
                 if let Some(existing_locations) = pair_locations.get_mut(&overlap_pair) {
-                    // Remove the overlapping positions from the locations list
-                    for &pos_to_remove in &positions {
-                        if let Some(index) = existing_locations.iter().position(|&p| p == pos_to_remove) {
-                            existing_locations.swap_remove(index);
+                    // Remove overlapping positions
+                    for &pos in &positions {
+                        if let Some(idx) = existing_locations.iter().position(|&p| p == pos) {
+                            existing_locations.swap_remove(idx);
                         }
                     }
                     
-                    // Update priority queue if the pair still exists
+                    // Update queue or remove pair if needed
                     if existing_locations.is_empty() {
                         pair_locations.remove(&overlap_pair);
                         all_pairs.remove(&overlap_pair);
@@ -178,74 +161,58 @@ impl Bpe {
                         let new_count = existing_locations.len();
                         if new_count <= 1 {
                             all_pairs.remove(&overlap_pair);
-                        } else if let Some(entry) = all_pairs.get_priority(&overlap_pair) {
+                        } else if all_pairs.get_priority(&overlap_pair).is_some() {
                             all_pairs.set_priority(&overlap_pair, new_count);
                         }
                     }
                 }
             }
 
-            // Update frequencies of affected pairs for new potential merges
-            for (pattern_idx, pos) in locations_to_update {
-                // Find the next valid position after pos
-                let next_pos = pos + 1;
-                let next_valid_pos = if next_pos < valid_positions[pattern_idx].len() && valid_positions[pattern_idx][next_pos] {
-                    next_pos
-                } else if next_pos + 1 < valid_positions[pattern_idx].len() && valid_positions[pattern_idx][next_pos + 1] {
-                    next_pos + 1
+            // Form new pairs after merges
+            for (pattern_idx, pos) in positions_to_update {
+                // Find the next valid position
+                let next_valid_pos = if pos + 1 < valid_positions[pattern_idx].len() && valid_positions[pattern_idx][pos + 1] {
+                    pos + 1
+                } else if pos + 2 < valid_positions[pattern_idx].len() && valid_positions[pattern_idx][pos + 2] {
+                    pos + 2
                 } else {
-                    continue; // No valid next position
+                    continue;
                 };
 
-                let left_id = patterns[pattern_idx][pos];
-                let right_id = patterns[pattern_idx][next_valid_pos];
-                let new_pair = (left_id, right_id);
-
-                // Update pair locations
+                // Create new pair
+                let new_pair = (patterns[pattern_idx][pos], patterns[pattern_idx][next_valid_pos]);
+                
+                // Update pair locations and priority queue
                 if let Some(locations) = pair_locations.get_mut(&new_pair) {
-                    // Add this position to locations
                     locations.push((pattern_idx, pos));
                     
-                    // Update count in priority queue
-                    match all_pairs.entry(new_pair) {
-                        Entry::Occupied(_) => {
-                            all_pairs.set_priority(&new_pair, locations.len());
-                        }
-                        Entry::Vacant(entry) => {
-                            if locations.len() > 1 {
-                                entry.set_priority(locations.len());
-                            }
+                    let new_count = locations.len();
+                    if new_count > 1 {
+                        match all_pairs.entry(new_pair) {
+                            Entry::Occupied(_) => { all_pairs.set_priority(&new_pair, new_count); },
+                            Entry::Vacant(entry) => { entry.set_priority(new_count); },
                         }
                     }
                 } else {
-                    // Add new pair
-                    let mut new_locations = Vec::new();
-                    new_locations.push((pattern_idx, pos));
-                    let count = new_locations.len();
-                    pair_locations.insert(new_pair, new_locations);
-                    
-                    if count > 1 {
-                        all_pairs.push(new_pair, count);
-                    }
+                    let mut locations = Vec::new();
+                    locations.push((pattern_idx, pos));
+                    pair_locations.insert(new_pair, locations);
                 }
             }
         }
 
-        // Compress the patterns by removing invalid positions
-        let final_patterns: Vec<Vec<TokenId>> = patterns
+        // Create final patterns by removing invalid positions
+        let patterns = patterns
             .iter()
             .enumerate()
             .map(|(i, pattern)| {
                 pattern
                     .iter()
                     .zip(valid_positions[i].iter())
-                    .filter_map(|(token, &valid)| if valid { Some(*token) } else { None })
+                    .filter_map(|(&token, &valid)| valid.then_some(token))
                     .collect()
             })
-            .collect();
-
-        // Update the patterns for any final processing
-        patterns = final_patterns;
+            .collect::<Vec<Vec<TokenId>>>();
 
         bpe
     }
