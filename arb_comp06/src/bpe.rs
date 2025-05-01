@@ -3,7 +3,6 @@ use crate::token::{find_most_common_duplicate_id_pair, merge, Token, TokenId};
 use indexmap::IndexMap;
 use keyed_priority_queue::{KeyedPriorityQueue, Entry};
 use std::collections::HashMap;
-use std::cmp::Reverse;
 
 pub struct Bpe {
     ids_to_tokens: IndexMap<TokenId, Token>,
@@ -99,12 +98,12 @@ impl Bpe {
         // Initialize the priority queue with pair counts
         for (pair, locations) in &pair_locations {
             if locations.len() > 1 {
-                all_pairs.push(*pair, Reverse(locations.len()));
+                all_pairs.push(*pair, locations.len());
             }
         }
 
         // Main loop: find the most frequent pair and merge it
-        while let Some((pair, Reverse(count))) = all_pairs.pop() {
+        while let Some((pair, count)) = all_pairs.pop() {
             if count <= 1 {
                 break;
             }
@@ -164,11 +163,11 @@ impl Bpe {
                     // Update count in priority queue
                     match all_pairs.entry(new_pair) {
                         Entry::Occupied(_) => {
-                            all_pairs.set_priority(&new_pair, Reverse(locations.len()));
+                            all_pairs.set_priority(&new_pair, locations.len());
                         }
                         Entry::Vacant(entry) => {
                             if locations.len() > 1 {
-                                entry.set_priority(Reverse(locations.len()));
+                                entry.set_priority(locations.len());
                             }
                         }
                     }
@@ -180,7 +179,7 @@ impl Bpe {
                     pair_locations.insert(new_pair, new_locations);
                     
                     if count > 1 {
-                        all_pairs.push(new_pair, Reverse(count));
+                        all_pairs.push(new_pair, count);
                     }
                 }
             }
