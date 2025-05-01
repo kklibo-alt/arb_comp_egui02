@@ -74,6 +74,12 @@ impl Bpe {
         // Build initial pair counts using a HashMap
         let mut pair_locations: HashMap<(TokenId, TokenId), Vec<(usize, usize)>> = HashMap::new();
         let mut all_pairs = KeyedPriorityQueue::new();
+        
+        // Track valid positions in each pattern
+        let mut valid_positions: Vec<Vec<bool>> = patterns
+            .iter()
+            .map(|pattern| vec![true; pattern.len()])
+            .collect();
 
         // First pass: collect all pairs and their locations
         for (pattern_idx, pattern) in patterns.iter().enumerate() {
@@ -112,43 +118,52 @@ impl Bpe {
             let locations = pair_locations.remove(&pair).unwrap_or_default();
 
             for &(pattern_idx, pos) in &locations {
+                // Skip if positions are no longer valid or don't match the pair
                 if pos + 1 >= patterns[pattern_idx].len() || 
+                   !valid_positions[pattern_idx][pos] ||
+                   !valid_positions[pattern_idx][pos + 1] ||
                    patterns[pattern_idx][pos] != id0 ||
                    patterns[pattern_idx][pos + 1] != id1 {
-                    continue;  // Skip if the pair is no longer valid
+                    continue;
                 }
 
-                // Apply the merge
+                // Apply the merge: replace first token with new_id and mark second token as invalid
                 patterns[pattern_idx][pos] = new_id;
-                patterns[pattern_idx].remove(pos + 1);
+                valid_positions[pattern_idx][pos + 1] = false;
 
                 // Collect positions that need updating
-                if pos > 0 {
+                if pos > 0 && valid_positions[pattern_idx][pos - 1] {
                     locations_to_update.push((pattern_idx, pos - 1));
                 }
-                if pos < patterns[pattern_idx].len() - 1 {
+                if pos + 2 < patterns[pattern_idx].len() && valid_positions[pattern_idx][pos + 2] {
                     locations_to_update.push((pattern_idx, pos));
                 }
             }
 
             // Update frequencies of affected pairs
             for (pattern_idx, pos) in locations_to_update {
-                if pos + 1 >= patterns[pattern_idx].len() {
-                    continue;
-                }
+                // Find the next valid position after pos
+                let next_pos = pos + 1;
+                let next_valid_pos = if next_pos < valid_positions[pattern_idx].len() && valid_positions[pattern_idx][next_pos] {
+                    next_pos
+                } else if next_pos + 1 < valid_positions[pattern_idx].len() && valid_positions[pattern_idx][next_pos + 1] {
+                    next_pos + 1
+                } else {
+                    continue; // No valid next position
+                };
 
                 let left_id = patterns[pattern_idx][pos];
-                let right_id = patterns[pattern_idx][pos + 1];
+                let right_id = patterns[pattern_idx][next_valid_pos];
                 let new_pair = (left_id, right_id);
 
-                // Remove the old location
+                // Update pair locations
                 if let Some(locations) = pair_locations.get_mut(&new_pair) {
                     // Add this position to locations
                     locations.push((pattern_idx, pos));
                     
                     // Update count in priority queue
                     match all_pairs.entry(new_pair) {
-                        Entry::Occupied(entry) => {
+                        Entry::Occupied(_) => {
                             all_pairs.set_priority(&new_pair, Reverse(locations.len()));
                         }
                         Entry::Vacant(entry) => {
@@ -161,10 +176,31 @@ impl Bpe {
                     // Add new pair
                     let mut new_locations = Vec::new();
                     new_locations.push((pattern_idx, pos));
+                    let count = new_locations.len();
                     pair_locations.insert(new_pair, new_locations);
+                    
+                    if count > 1 {
+                        all_pairs.push(new_pair, Reverse(count));
+                    }
                 }
             }
         }
+
+        // Compress the patterns by removing invalid positions
+        let final_patterns: Vec<Vec<TokenId>> = patterns
+            .iter()
+            .enumerate()
+            .map(|(i, pattern)| {
+                pattern
+                    .iter()
+                    .zip(valid_positions[i].iter())
+                    .filter_map(|(token, &valid)| if valid { Some(*token) } else { None })
+                    .collect()
+            })
+            .collect();
+
+        // Update the patterns for any final processing
+        patterns = final_patterns;
 
         bpe
     }
