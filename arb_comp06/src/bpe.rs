@@ -116,6 +116,9 @@ impl Bpe {
             let mut locations_to_update = Vec::new();
             let locations = pair_locations.remove(&pair).unwrap_or_default();
 
+            // Track overlapping pairs that need their counts decremented
+            let mut overlapping_pairs_to_update: IndexMap<(TokenId, TokenId), Vec<(usize, usize)>> = IndexMap::new();
+
             for &(pattern_idx, pos) in &locations {
                 // Skip if positions are no longer valid or don't match the pair
                 if pos + 1 >= patterns[pattern_idx].len() || 
@@ -126,11 +129,29 @@ impl Bpe {
                     continue;
                 }
 
+                // Check for overlapping pairs before the current position
+                if pos > 0 && valid_positions[pattern_idx][pos - 1] {
+                    let prev_id = patterns[pattern_idx][pos - 1];
+                    let overlap_pair = (prev_id, id0);
+                    overlapping_pairs_to_update.entry(overlap_pair)
+                        .or_default()
+                        .push((pattern_idx, pos - 1));
+                }
+
+                // Check for overlapping pairs after the current position
+                if pos + 2 < patterns[pattern_idx].len() && valid_positions[pattern_idx][pos + 2] {
+                    let next_id = patterns[pattern_idx][pos + 2];
+                    let overlap_pair = (id1, next_id);
+                    overlapping_pairs_to_update.entry(overlap_pair)
+                        .or_default()
+                        .push((pattern_idx, pos + 1));
+                }
+
                 // Apply the merge: replace first token with new_id and mark second token as invalid
                 patterns[pattern_idx][pos] = new_id;
                 valid_positions[pattern_idx][pos + 1] = false;
 
-                // Collect positions that need updating
+                // Collect positions that need updating for new pairs
                 if pos > 0 && valid_positions[pattern_idx][pos - 1] {
                     locations_to_update.push((pattern_idx, pos - 1));
                 }
@@ -139,7 +160,32 @@ impl Bpe {
                 }
             }
 
-            // Update frequencies of affected pairs
+            // Update counts for overlapping pairs
+            for (overlap_pair, positions) in overlapping_pairs_to_update {
+                if let Some(existing_locations) = pair_locations.get_mut(&overlap_pair) {
+                    // Remove the overlapping positions from the locations list
+                    for &pos_to_remove in &positions {
+                        if let Some(index) = existing_locations.iter().position(|&p| p == pos_to_remove) {
+                            existing_locations.swap_remove(index);
+                        }
+                    }
+                    
+                    // Update priority queue if the pair still exists
+                    if existing_locations.is_empty() {
+                        pair_locations.remove(&overlap_pair);
+                        all_pairs.remove(&overlap_pair);
+                    } else {
+                        let new_count = existing_locations.len();
+                        if new_count <= 1 {
+                            all_pairs.remove(&overlap_pair);
+                        } else if let Some(entry) = all_pairs.get_priority(&overlap_pair) {
+                            all_pairs.set_priority(&overlap_pair, new_count);
+                        }
+                    }
+                }
+            }
+
+            // Update frequencies of affected pairs for new potential merges
             for (pattern_idx, pos) in locations_to_update {
                 // Find the next valid position after pos
                 let next_pos = pos + 1;
