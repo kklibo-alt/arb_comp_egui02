@@ -1,7 +1,6 @@
-use crate::pairs::ToPairs;
 use crate::recode::{condense, expand, to_bytes, to_ids};
 use crate::token::{find_most_common_duplicate_id_pair, merge, Token, TokenId};
-use crate::utils::increment;
+use crate::utils::CollectCounts;
 use indexmap::{IndexMap, IndexSet};
 use keyed_priority_queue::KeyedPriorityQueue;
 
@@ -64,9 +63,9 @@ impl Bpe {
 
         (0..=u8::MAX).for_each(|x| bpe.add_id(TokenId(x as usize), Token::Byte(x)));
 
-        let mut patterns = data.iter().map(|x| bpe.encode(x)).collect::<Vec<_>>();
+        let patterns = data.iter().map(|x| bpe.encode(x)).collect::<Vec<_>>();
 
-        fn find_id_pairs(ids: &Vec<TokenId>) -> IndexMap<(TokenId, TokenId), IndexSet<usize>> {
+        fn find_id_pairs(ids: &[TokenId]) -> IndexMap<(TokenId, TokenId), IndexSet<usize>> {
             let mut pair_locations = IndexMap::new();
 
             ids.windows(2).enumerate().for_each(|(i, ids)| {
@@ -79,19 +78,16 @@ impl Bpe {
             pair_locations
         }
 
-        let pair_locations_in_sequences = patterns.iter().map(find_id_pairs).collect::<Vec<_>>();
+        let pair_locations_in_sequences = patterns
+            .iter()
+            .map(|pattern| find_id_pairs(pattern))
+            .collect::<Vec<_>>();
 
-        let mut pair_counts = IndexMap::new();
-
-        pair_locations_in_sequences
-            .into_iter()
+        let pair_counts = pair_locations_in_sequences
+            .iter()
             .flatten()
-            .for_each(|((id0, id1), locations)| {
-                pair_counts
-                    .entry((id0, id1))
-                    .and_modify(|x| *x += locations.len())
-                    .or_insert(locations.len());
-            });
+            .map(|(pair, locations)| (pair, locations.len()))
+            .collect_counts();
 
         let mut pair_occurrences = pair_counts
             .into_iter()
