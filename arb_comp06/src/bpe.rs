@@ -1,3 +1,5 @@
+use std::usize;
+
 use crate::recode::{condense, expand, to_bytes, to_ids};
 use crate::token::{find_most_common_duplicate_id_pair, merge, Token, TokenId};
 use crate::utils::CollectCounts;
@@ -65,6 +67,7 @@ impl Bpe {
 
         let patterns = data.iter().map(|x| bpe.encode(x)).collect::<Vec<_>>();
 
+        /// For each token id pair in `ids`: record the index of its first element.
         fn find_id_pairs(ids: &[TokenId]) -> IndexMap<(TokenId, TokenId), IndexSet<usize>> {
             let mut pair_locations = IndexMap::new();
 
@@ -86,12 +89,36 @@ impl Bpe {
         let pair_counts = pair_locations_in_sequences
             .iter()
             .flatten()
-            .map(|(pair, locations)| (pair, locations.len()))
+            .map(|(pair, locations)| (*pair, locations.len()))
             .collect_counts();
 
-        let mut pair_occurrences = pair_counts
-            .into_iter()
-            .collect::<KeyedPriorityQueue<_, _>>();
+        let mut pair_occurrences: KeyedPriorityQueue<(TokenId, TokenId), usize> =
+            pair_counts.into_iter().collect();
+
+        //note: using TokenId of usize::MAX to indicate empty index (refine/replace?)
+        fn get_prev_id(ids: &[TokenId], index: usize) -> Option<(TokenId, usize)> {
+            for i in (0..index).rev() {
+                if ids[i] != TokenId(usize::MAX) {
+                    return Some((ids[i], i));
+                };
+            }
+            None
+        }
+
+        fn get_next_id(ids: &[TokenId], index: usize) -> Option<(TokenId, usize)> {
+            for i in (index + 1..ids.len()) {
+                if ids[i] != TokenId(usize::MAX) {
+                    return Some((ids[i], i));
+                };
+            }
+            None
+        }
+
+        while let Some(((id0, id1), count)) = pair_occurrences.pop() {
+            if count < 2 {
+                break;
+            }
+        }
 
         bpe
     }
