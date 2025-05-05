@@ -1,5 +1,3 @@
-use std::usize;
-
 use crate::recode::{condense, expand, to_bytes, to_ids};
 use crate::token::{find_most_common_duplicate_id_pair, merge, Token, TokenId};
 use crate::utils::CollectCounts;
@@ -97,18 +95,18 @@ impl Bpe {
 
         //note: using TokenId of usize::MAX to indicate empty index (refine/replace?)
         fn get_prev_id(ids: &[TokenId], index: usize) -> Option<(TokenId, usize)> {
-            for i in (0..index).rev() {
-                if ids[i] != TokenId(usize::MAX) {
-                    return Some((ids[i], i));
+            for (i, &id) in ids.iter().enumerate().take(index).rev() {
+                if id != TokenId(usize::MAX) {
+                    return Some((id, i));
                 };
             }
             None
         }
 
         fn get_next_id(ids: &[TokenId], index: usize) -> Option<(TokenId, usize)> {
-            for i in (index + 1..ids.len()) {
-                if ids[i] != TokenId(usize::MAX) {
-                    return Some((ids[i], i));
+            for (i, &id) in ids.iter().enumerate().skip(index + 1) {
+                if id != TokenId(usize::MAX) {
+                    return Some((id, i));
                 };
             }
             None
