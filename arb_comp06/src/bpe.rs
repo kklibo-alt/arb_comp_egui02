@@ -24,6 +24,8 @@ impl Bpe {
     }
 
     pub fn new(data: &[&[u8]]) -> Self {
+        //temp
+        return Self::new_faster(data);
         let mut bpe = Self {
             ids_to_tokens: IndexMap::new(),
             tokens_to_ids: IndexMap::new(),
@@ -146,6 +148,19 @@ impl Bpe {
                     }
                 };
 
+                // for the target pair: don't remove from pair_occurrences: it's already gone
+                let mut deregister_target_pair = |pair: &(TokenId, TokenId),
+                                                  first_index: usize,
+                                                  pair_locations: &mut IndexMap<
+                    (TokenId, TokenId),
+                    IndexSet<usize>,
+                >| {
+                    assert!(pair_locations
+                        .get_mut(pair)
+                        .unwrap()
+                        .swap_remove(&first_index));
+                };
+
                 let mut new_pair_locations = IndexSet::<usize>::new();
 
                 for index in pair_locations.get(&(id0, id1)).unwrap().clone() {
@@ -164,7 +179,7 @@ impl Bpe {
                         deregister_pair(&(id, id0), i, pair_locations);
                     }
 
-                    deregister_pair(&(id0, id1), index, pair_locations);
+                    deregister_target_pair(&(id0, id1), index, pair_locations);
 
                     if let Some((id, i)) = next_id {
                         deregister_pair(&(id1, id), i, pair_locations);
