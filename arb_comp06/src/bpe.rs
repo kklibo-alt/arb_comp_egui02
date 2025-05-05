@@ -116,6 +116,21 @@ impl Bpe {
             if count < 2 {
                 break;
             }
+            let new_id = bpe.ids_to_tokens.len();
+            bpe.add_id(TokenId(new_id), Token::Merge(id0, id1));
+
+
+            /*
+		    replace all pair occurrences with merge token:
+			for each occurrence
+				identify overlapping pairs (usually 2, -1 for each edge hit)
+				remove (up to)3 pairs: replaced + neighbors
+					fn: remove occurrence from pair priority queue (remove + decrement)
+				insert new token (+ update info for next/prev token as needed)
+			insert these new pairs into priority queue
+            */
+
+
         }
 
         bpe
