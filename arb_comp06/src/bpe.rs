@@ -134,6 +134,7 @@ impl Bpe {
                     (TokenId, TokenId),
                     IndexSet<usize>,
                 >| {
+                    dbg!(pair);
                     assert!(pair_locations
                         .get_mut(pair)
                         .unwrap()
@@ -163,16 +164,21 @@ impl Bpe {
 
                 let mut new_pair_locations = IndexSet::<usize>::new();
 
+                println!("{pair_locations:?}");
+
+
+
                 for index in pair_locations.get(&(id0, id1)).unwrap().clone() {
                     // for (temp?) borrow checker workaround: ensure entries in non-updating clone
                     // for this loop are still in live set
                     if !pair_locations.get(&(id0, id1)).unwrap().contains(&index) {
                         continue;
                     }
+                    dbg!((id0, id1));
 
                     let prev_id = get_prev_id(pattern, index);
                     //let first_id = *pattern.get(index).unwrap();
-                    let second_index = get_next_id(pattern, index).unwrap().1;
+                    let (second_id, second_index) = get_next_id(pattern, index).unwrap();
                     let next_id = get_next_id(pattern, second_index);
 
                     if let Some((id, i)) = prev_id {
@@ -182,7 +188,7 @@ impl Bpe {
                     deregister_target_pair(&(id0, id1), index, pair_locations);
 
                     if let Some((id, i)) = next_id {
-                        deregister_pair(&(id1, id), i, pair_locations);
+                        deregister_pair(&(id1, id), second_index, pair_locations);
                     }
 
                     *pattern.get_mut(index).unwrap() = TokenId(new_id);
