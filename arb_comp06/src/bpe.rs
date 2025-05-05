@@ -119,6 +119,9 @@ impl Bpe {
             let new_id = bpe.ids_to_tokens.len();
             bpe.add_id(TokenId(new_id), Token::Merge(id0, id1));
 
+            let mut new_pair_locations_in_sequences = Vec::new();
+            let mut new_pair_count = 0;
+
             for (pattern, pair_locations) in patterns
                 .iter_mut()
                 .zip(pair_locations_in_sequences.iter_mut())
@@ -143,6 +146,8 @@ impl Bpe {
                     }
                 };
 
+                let mut new_pair_locations = IndexSet::<usize>::new();
+
                 for index in pair_locations.get(&(id0, id1)).unwrap().clone() {
                     // for (temp?) borrow checker workaround: ensure entries in non-updating clone
                     // for this loop are still in live set
@@ -151,14 +156,38 @@ impl Bpe {
                     }
 
                     let prev_id = get_prev_id(pattern, index);
-                    let first_id = *pattern.get(index).unwrap();
-                    let second_id = get_next_id(pattern, index).unwrap();
-                    let next_id = get_next_id(pattern, second_id.1);
+                    //let first_id = *pattern.get(index).unwrap();
+                    let second_index = get_next_id(pattern, index).unwrap().1;
+                    let next_id = get_next_id(pattern, second_index);
 
                     if let Some((id, i)) = prev_id {
-                        deregister_pair(&(id, first_id), i, pair_locations);
+                        deregister_pair(&(id, id0), i, pair_locations);
                     }
+
+                    deregister_pair(&(id0, id1), index, pair_locations);
+
+                    if let Some((id, i)) = next_id {
+                        deregister_pair(&(id1, id), i, pair_locations);
+                    }
+
+                    *pattern.get_mut(index).unwrap() = TokenId(new_id);
+                    *pattern.get_mut(second_index).unwrap() = TokenId(usize::MAX);
+
+                    assert!(new_pair_locations.insert(index));
                 }
+
+                new_pair_count += new_pair_locations.len();
+                new_pair_locations_in_sequences.push(new_pair_locations);
+            }
+
+            pair_occurrences.push((id0, id1), new_pair_count);
+
+            //add new_pair_locations_in_sequences
+            for (locations, new_locations) in pair_locations_in_sequences
+                .iter_mut()
+                .zip(new_pair_locations_in_sequences.into_iter())
+            {
+                assert!(locations.insert((id0, id1), new_locations).is_none());
             }
 
             /*
