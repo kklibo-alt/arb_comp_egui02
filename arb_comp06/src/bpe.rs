@@ -63,7 +63,7 @@ impl Bpe {
 
         (0..=u8::MAX).for_each(|x| bpe.add_id(TokenId(x as usize), Token::Byte(x)));
 
-        let patterns = data.iter().map(|x| bpe.encode(x)).collect::<Vec<_>>();
+        let mut patterns = data.iter().map(|x| bpe.encode(x)).collect::<Vec<_>>();
 
         /// For each token id pair in `ids`: record the index of its first element.
         fn find_id_pairs(ids: &[TokenId]) -> IndexMap<(TokenId, TokenId), IndexSet<usize>> {
@@ -79,7 +79,7 @@ impl Bpe {
             pair_locations
         }
 
-        let pair_locations_in_sequences = patterns
+        let mut pair_locations_in_sequences = patterns
             .iter()
             .map(|pattern| find_id_pairs(pattern))
             .collect::<Vec<_>>();
@@ -119,18 +119,57 @@ impl Bpe {
             let new_id = bpe.ids_to_tokens.len();
             bpe.add_id(TokenId(new_id), Token::Merge(id0, id1));
 
+            for (pattern, pair_locations) in patterns
+                .iter_mut()
+                .zip(pair_locations_in_sequences.iter_mut())
+            {
+                let mut deregister_pair = |pair: &(TokenId, TokenId),
+                                           first_index: usize,
+                                           pair_locations: &mut IndexMap<
+                    (TokenId, TokenId),
+                    IndexSet<usize>,
+                >| {
+                    assert!(pair_locations
+                        .get_mut(pair)
+                        .unwrap()
+                        .swap_remove(&first_index));
+
+                    let pair_count = *pair_occurrences.get_priority(pair).unwrap();
+                    assert!(pair_count > 0);
+                    if pair_count == 1 {
+                        pair_occurrences.remove(pair);
+                    } else {
+                        pair_occurrences.set_priority(pair, pair_count - 1).unwrap();
+                    }
+                };
+
+                //fix this: non-updating clone of pair locations will contain deleted overlaps
+                // in block of repeating TokenId
+                let x = pair_locations.get(&(id0, id1)).unwrap().clone();
+
+                for index in x {
+                    //for &index in pair_locations.get(&(id0,id1)).unwrap() {
+
+                    let prev_id = get_prev_id(pattern, index);
+                    let first_id = *pattern.get(index).unwrap();
+                    let second_id = get_next_id(pattern, index).unwrap();
+                    let next_id = get_next_id(pattern, second_id.1);
+
+                    if let Some((id, i)) = prev_id {
+                        deregister_pair(&(id, first_id), i, pair_locations);
+                    }
+                }
+            }
 
             /*
-		    replace all pair occurrences with merge token:
-			for each occurrence
-				identify overlapping pairs (usually 2, -1 for each edge hit)
-				remove (up to)3 pairs: replaced + neighbors
-					fn: remove occurrence from pair priority queue (remove + decrement)
-				insert new token (+ update info for next/prev token as needed)
-			insert these new pairs into priority queue
+            replace all pair occurrences with merge token:
+            for each occurrence
+                identify overlapping pairs (usually 2, -1 for each edge hit)
+                remove (up to)3 pairs: replaced + neighbors
+                    fn: remove occurrence from pair priority queue (remove + decrement)
+                insert new token (+ update info for next/prev token as needed)
+            insert these new pairs into priority queue
             */
-
-
         }
 
         bpe
