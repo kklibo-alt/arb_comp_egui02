@@ -139,6 +139,9 @@ impl Bpe {
                         .get_mut(pair)
                         .unwrap()
                         .swap_remove(&first_index));
+                    if pair_locations.get(pair).unwrap().is_empty() {
+                        assert!(pair_locations.swap_remove(pair).is_some());
+                    }
 
                     let pair_count = *pair_occurrences.get_priority(pair).unwrap();
                     assert!(pair_count > 0);
@@ -160,6 +163,9 @@ impl Bpe {
                         .get_mut(pair)
                         .unwrap()
                         .swap_remove(&first_index));
+                    if pair_locations.get(pair).unwrap().is_empty() {
+                        assert!(pair_locations.swap_remove(pair).is_some());
+                    }
                 };
 
                 let mut new_pair_locations = IndexSet::<usize>::new();
@@ -167,6 +173,7 @@ impl Bpe {
                 println!("{pair_locations:?}");
 
 
+                if !pair_locations.contains_key(&(id0,id1)) {continue;}
 
                 for index in pair_locations.get(&(id0, id1)).unwrap().clone() {
                     // for (temp?) borrow checker workaround: ensure entries in non-updating clone
@@ -208,6 +215,8 @@ impl Bpe {
                 .iter_mut()
                 .zip(new_pair_locations_in_sequences.into_iter())
             {
+                println!("{:?}", (id0, id1));
+                println!("{:?}", (&locations, &new_locations));
                 assert!(locations.insert((id0, id1), new_locations).is_none());
             }
 
