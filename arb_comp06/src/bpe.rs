@@ -143,12 +143,12 @@ impl Bpe {
                     }
                 };
 
-                //fix this: non-updating clone of pair locations will contain deleted overlaps
-                // in block of repeating TokenId
-                let x = pair_locations.get(&(id0, id1)).unwrap().clone();
-
-                for index in x {
-                    //for &index in pair_locations.get(&(id0,id1)).unwrap() {
+                for index in pair_locations.get(&(id0, id1)).unwrap().clone() {
+                    // for (temp?) borrow checker workaround: ensure entries in non-updating clone
+                    // for this loop are still in live set
+                    if !pair_locations.get(&(id0, id1)).unwrap().contains(&index) {
+                        continue;
+                    }
 
                     let prev_id = get_prev_id(pattern, index);
                     let first_id = *pattern.get(index).unwrap();
