@@ -1,14 +1,29 @@
+use crate::recode::{condense, expand, to_bytes, to_ids};
+use crate::token::{Token, TokenId};
+use crate::utils::CollectCounts;
+use indexmap::{IndexMap, IndexSet};
+use keyed_priority_queue::KeyedPriorityQueue;
 
+pub struct RePair {
+    ids_to_tokens: IndexMap<TokenId, Token>,
+    tokens_to_ids: IndexMap<Token, TokenId>,
+}
+
+impl RePair {
+    fn add_id(&mut self, id: TokenId, token: Token) {
+        self.ids_to_tokens.insert(id, token);
+        self.tokens_to_ids.insert(token, id);
+    }
     // first attempt: ignore token repetition block overcounting for now
     pub fn new_faster(data: &[&[u8]]) -> Self {
-        let mut bpe = Self {
+        let mut re_pair = Self {
             ids_to_tokens: IndexMap::new(),
             tokens_to_ids: IndexMap::new(),
         };
 
-        (0..=u8::MAX).for_each(|x| bpe.add_id(TokenId(x as usize), Token::Byte(x)));
+        (0..=u8::MAX).for_each(|x| re_pair.add_id(TokenId(x as usize), Token::Byte(x)));
 
-        let mut patterns = data.iter().map(|x| bpe.encode(x)).collect::<Vec<_>>();
+        let mut patterns = data.iter().map(|x| re_pair.encode(x)).collect::<Vec<_>>();
 
         /// For each token id pair in `ids`: record the index of its first element.
         fn find_id_pairs(ids: &[TokenId]) -> IndexMap<(TokenId, TokenId), IndexSet<usize>> {
@@ -128,8 +143,8 @@
             if count < 2 {
                 break;
             }
-            let new_id = TokenId(bpe.ids_to_tokens.len());
-            bpe.add_id(new_id, Token::Merge(id0, id1));
+            let new_id = TokenId(re_pair.ids_to_tokens.len());
+            re_pair.add_id(new_id, Token::Merge(id0, id1));
 
             let effects = patterns
                 .iter_mut()
@@ -221,5 +236,12 @@
             */
         }
 
-        bpe
+        re_pair
     }
+    pub fn encode(&self, data: &[u8]) -> Vec<TokenId> {
+        let pattern = to_ids(data, &self.tokens_to_ids);
+        let merge_if = |id0, id1| self.tokens_to_ids.get(&Token::Merge(id0, id1)).copied();
+
+        condense(pattern, merge_if)
+    }
+}
