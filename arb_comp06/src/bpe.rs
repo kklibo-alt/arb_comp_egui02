@@ -206,6 +206,17 @@ impl Bpe {
                     locations.retain(|x| !removed_locations.contains(x));
                 });
 
+            effects
+                .iter()
+                .flat_map(|effects| &effects.removed_pair_counts)
+                .for_each(|(removed_pair, removed_count)| {
+                    let count = pair_occurrences.get_priority(removed_pair).unwrap();
+                    assert!(count > removed_count);
+                    pair_occurrences
+                        .set_priority(removed_pair, count - *removed_count)
+                        .unwrap();
+                });
+
             /*
             replace all pair occurrences with merge token:
             for each occurrence
