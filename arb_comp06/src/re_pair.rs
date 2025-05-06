@@ -15,7 +15,7 @@ impl RePair {
         self.tokens_to_ids.insert(token, id);
     }
     // first attempt: ignore token repetition block overcounting for now
-    pub fn new_faster(data: &[&[u8]]) -> Self {
+    pub fn new(data: &[&[u8]]) -> Self {
         let mut re_pair = Self {
             ids_to_tokens: IndexMap::new(),
             tokens_to_ids: IndexMap::new(),
@@ -238,10 +238,67 @@ impl RePair {
 
         re_pair
     }
+
     pub fn encode(&self, data: &[u8]) -> Vec<TokenId> {
         let pattern = to_ids(data, &self.tokens_to_ids);
         let merge_if = |id0, id1| self.tokens_to_ids.get(&Token::Merge(id0, id1)).copied();
 
         condense(pattern, merge_if)
+    }
+
+    pub fn decode(&self, data: Vec<TokenId>) -> Vec<u8> {
+        let mut result = data;
+
+        result = expand(result, &self.ids_to_tokens);
+
+        to_bytes(&result, &self.ids_to_tokens)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_re_pair() {
+        let re_pair = RePair::new(&[]);
+        assert_eq!(
+            re_pair.encode(&[0x61, 0x62, 0x63]),
+            vec![TokenId(0x61), TokenId(0x62), TokenId(0x63)]
+        );
+        assert_eq!(
+            re_pair.decode(vec![TokenId(0x61), TokenId(0x62), TokenId(0x63)]),
+            vec![0x61, 0x62, 0x63]
+        );
+
+        let re_pair = RePair::new(&[&[0x61, 0x62, 0x63], &[0x64, 0x65, 0x66]]);
+        assert_eq!(
+            re_pair.encode(&[0x61, 0x62, 0x63]),
+            vec![TokenId(0x61), TokenId(0x62), TokenId(0x63)]
+        );
+        assert_eq!(
+            re_pair.decode(vec![TokenId(0x61), TokenId(0x62), TokenId(0x63)]),
+            vec![0x61, 0x62, 0x63]
+        );
+
+        let re_pair = RePair::new(&[
+            &[0x61, 0x62, 0x63],
+            &[0x64, 0x65, 0x66],
+            &[0x61, 0x62, 0x63],
+        ]);
+        assert_eq!(re_pair.encode(&[0x61, 0x62, 0x63]), vec![TokenId(257)]);
+        assert_eq!(re_pair.decode(vec![TokenId(257)]), vec![0x61, 0x62, 0x63]);
+
+        /*
+        let re_pair = RePair::new(&[&[1, 2, 3, 2, 3, 4], &[1, 2, 3, 1, 2, 3]]);
+        assert_eq!(
+            re_pair.encode(&[1, 2, 3, 2, 3, 4]),
+            vec![TokenId(257), TokenId(256), TokenId(4)]
+        );
+        assert_eq!(
+            re_pair.decode(vec![TokenId(257), TokenId(256), TokenId(4)]),
+            vec![1, 2, 3, 2, 3, 4]
+        );
+        */
     }
 }
