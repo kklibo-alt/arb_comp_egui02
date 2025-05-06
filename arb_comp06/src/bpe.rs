@@ -180,15 +180,17 @@ impl Bpe {
             if count < 2 {
                 break;
             }
-            let new_id = bpe.ids_to_tokens.len();
-            bpe.add_id(TokenId(new_id), Token::Merge(id0, id1));
+            let new_id = TokenId(bpe.ids_to_tokens.len());
+            bpe.add_id(new_id, Token::Merge(id0, id1));
 
-            for (pattern, pair_locations) in patterns
+            let effects = patterns
                 .iter_mut()
                 .zip(pair_locations_in_sequences.iter_mut())
-            {
-            
-            }
+                .map(|(pattern, pair_locations)| {
+                    let locations = pair_locations.swap_remove(&(id0, id1)).unwrap();
+                    replace_pair(id0, id1, locations, pattern, new_id)
+                })
+                .collect::<Vec<_>>();
 
             /*
             replace all pair occurrences with merge token:
