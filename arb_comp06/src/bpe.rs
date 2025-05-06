@@ -118,8 +118,8 @@ impl Bpe {
 
         #[derive(Debug)]
         struct ReplacePairEffects {
-            new_pair_locations: IndexSet<usize>,
-            new_pair_count: usize,
+            new_pair_locations: IndexMap<(TokenId, TokenId), IndexSet<usize>>,
+            new_pair_counts: IndexMap<(TokenId, TokenId), usize>,
             removed_pair_locations: IndexMap<(TokenId, TokenId), IndexSet<usize>>,
             removed_pair_counts: IndexMap<(TokenId, TokenId), usize>,
         }
@@ -131,8 +131,8 @@ impl Bpe {
             pattern: &mut [TokenId],
             replacement: TokenId,
         ) -> ReplacePairEffects {
-            let mut new_pair_locations = IndexSet::new();
-            let mut new_pair_count = 0;
+            let mut new_pair_locations = IndexMap::<_, IndexSet<usize>>::new();
+            let mut new_pair_counts = IndexMap::new();
             let mut removed_pair_locations = IndexMap::<_, IndexSet<usize>>::new();
             let mut removed_pair_counts = IndexMap::new();
 
@@ -142,6 +142,14 @@ impl Bpe {
                     .or_default()
                     .insert(first_index);
                 *removed_pair_counts.entry(pair).or_default() += 1;
+            };
+
+            let mut add_pair = |pair: (TokenId, TokenId), first_index| {
+                new_pair_locations
+                    .entry(pair)
+                    .or_default()
+                    .insert(first_index);
+                *new_pair_counts.entry(pair).or_default() += 1;
             };
 
             for index0 in locations {
@@ -155,22 +163,21 @@ impl Bpe {
 
                 if let Some((prev_id, prev_index)) = prev_token {
                     remove_pair((prev_id, id0), prev_index);
+                    add_pair((prev_id, replacement), prev_index);
                 }
 
                 if let Some((next_id, _next_index)) = next_token {
                     remove_pair((id1, next_id), index1);
+                    add_pair((replacement, next_id), index0);
                 }
 
                 *pattern.get_mut(index0).unwrap() = replacement;
                 *pattern.get_mut(index1).unwrap() = TokenId(usize::MAX);
-
-                assert!(new_pair_locations.insert(index0));
-                new_pair_count += 1;
             }
 
             ReplacePairEffects {
                 new_pair_locations,
-                new_pair_count,
+                new_pair_counts,
                 removed_pair_locations,
                 removed_pair_counts,
             }
@@ -240,10 +247,13 @@ impl Bpe {
             pair_locations_in_sequences
                 .iter_mut()
                 .zip(effects.iter().map(|effects| &effects.new_pair_locations))
-                .for_each(|(pair_locations, new_locations)| {
-                    let new_pair = (id0, id1);
-                    assert!(!pair_locations.contains_key(&new_pair));
-                    pair_locations.insert(new_pair, new_locations.clone());
+                .for_each(|(pair_locations, new_pair_locations)| {
+                    for (new_pair, new_locations) in new_pair_locations {
+                        let locations = pair_locations.entry(*new_pair).or_default();
+                        for &new_location in new_locations {
+                            assert!(locations.insert(new_location));
+                        }
+                    }
                 });
 
             pair_occurrences.push(
