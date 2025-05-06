@@ -226,6 +226,14 @@ impl Bpe {
                     pair_locations.insert(new_pair, new_locations.clone());
                 });
 
+            pair_occurrences.push(
+                (id0, id1),
+                effects
+                    .iter()
+                    .map(|effects| &effects.new_pair_count)
+                    .sum::<usize>(),
+            );
+
             /*
             replace all pair occurrences with merge token:
             for each occurrence
