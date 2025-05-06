@@ -192,6 +192,20 @@ impl Bpe {
                 })
                 .collect::<Vec<_>>();
 
+            pair_locations_in_sequences
+                .iter_mut()
+                .zip(
+                    effects
+                        .iter()
+                        .flat_map(|effects| &effects.removed_pair_locations),
+                )
+                .for_each(|(pair_locations, (removed_pair, removed_locations))| {
+                    let locations = pair_locations.get_mut(removed_pair).unwrap();
+                    assert!(locations.len() >= removed_locations.len());
+                    assert!(removed_locations.iter().all(|x| locations.contains(x)));
+                    locations.retain(|x| !removed_locations.contains(x));
+                });
+
             /*
             replace all pair occurrences with merge token:
             for each occurrence
