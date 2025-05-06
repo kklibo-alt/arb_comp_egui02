@@ -1,10 +1,6 @@
-use std::usize;
-
 use crate::recode::{condense, expand, to_bytes, to_ids};
 use crate::token::{find_most_common_duplicate_id_pair, merge, Token, TokenId};
-use crate::utils::CollectCounts;
-use indexmap::{IndexMap, IndexSet};
-use keyed_priority_queue::KeyedPriorityQueue;
+use indexmap::IndexMap;
 
 pub struct Bpe {
     ids_to_tokens: IndexMap<TokenId, Token>,
@@ -26,8 +22,6 @@ impl Bpe {
     }
 
     pub fn new(data: &[&[u8]]) -> Self {
-        //temp
-        return Self::new_faster(data);
         let mut bpe = Self {
             ids_to_tokens: IndexMap::new(),
             tokens_to_ids: IndexMap::new(),
