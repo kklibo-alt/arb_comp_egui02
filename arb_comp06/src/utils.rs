@@ -83,6 +83,126 @@ mod tests {
     }
 
     #[test]
+    fn test_append_to_sets_empty_maps() {
+        // Added by Claude 3.7 Sonnet: Test handling of empty maps
+        // Empty acc + empty to_add
+        let mut empty_acc = IndexMap::<i32, IndexSet<i32>>::new();
+        append_to_sets(&mut empty_acc, IndexMap::new());
+        assert_eq!(empty_acc.len(), 0);
+
+        // Empty acc + non-empty to_add
+        let mut acc = IndexMap::new();
+        append_to_sets(&mut acc, IndexMap::from([(1, IndexSet::from([10, 20]))]));
+        assert_eq!(acc[&1], IndexSet::from([10, 20]));
+        assert_eq!(acc.len(), 1);
+
+        // Non-empty acc + empty to_add
+        let mut acc = IndexMap::from([(1, IndexSet::from([10, 20]))]);
+        append_to_sets(&mut acc, IndexMap::new());
+        assert_eq!(acc[&1], IndexSet::from([10, 20]));
+        assert_eq!(acc.len(), 1);
+    }
+
+    #[test]
+    fn test_append_to_sets_duplicates() {
+        // Added by Claude 3.7 Sonnet: Test deduplication of values
+        // Test with overlapping values (should be unique in result)
+        let mut acc = IndexMap::from([(1, IndexSet::from([10, 20, 30]))]);
+        append_to_sets(
+            &mut acc,
+            IndexMap::from([(1, IndexSet::from([20, 30, 40]))]),
+        );
+        assert_eq!(acc[&1], IndexSet::from([10, 20, 30, 40]));
+        assert_eq!(acc[&1].len(), 4); // No duplicates
+    }
+
+    #[test]
+    fn test_append_to_sets_multiple_operations() {
+        // Added by Claude 3.7 Sonnet: Test multiple append operations across different keys
+        let mut acc = IndexMap::new();
+
+        // Multiple append operations
+        append_to_sets(
+            &mut acc,
+            IndexMap::from([(1, IndexSet::from([10, 20])), (2, IndexSet::from([30, 40]))]),
+        );
+
+        append_to_sets(
+            &mut acc,
+            IndexMap::from([(2, IndexSet::from([50, 60])), (3, IndexSet::from([70, 80]))]),
+        );
+
+        append_to_sets(
+            &mut acc,
+            IndexMap::from([
+                (1, IndexSet::from([90])),
+                (3, IndexSet::from([100])),
+                (4, IndexSet::from([110])),
+            ]),
+        );
+
+        assert_eq!(acc[&1], IndexSet::from([10, 20, 90]));
+        assert_eq!(acc[&2], IndexSet::from([30, 40, 50, 60]));
+        assert_eq!(acc[&3], IndexSet::from([70, 80, 100]));
+        assert_eq!(acc[&4], IndexSet::from([110]));
+        assert_eq!(acc.len(), 4);
+    }
+
+    #[test]
+    fn test_append_to_sets_string_keys() {
+        // Added by Claude 3.7 Sonnet: Test with string keys and values
+        let mut acc = IndexMap::new();
+        append_to_sets(
+            &mut acc,
+            IndexMap::from([
+                ("fruits", IndexSet::from(["apple", "banana"])),
+                ("vegetables", IndexSet::from(["carrot", "potato"])),
+            ]),
+        );
+
+        append_to_sets(
+            &mut acc,
+            IndexMap::from([
+                ("fruits", IndexSet::from(["orange", "grape"])),
+                ("grains", IndexSet::from(["wheat", "rice"])),
+            ]),
+        );
+
+        assert_eq!(
+            acc[&"fruits"],
+            IndexSet::from(["apple", "banana", "orange", "grape"])
+        );
+        assert_eq!(acc[&"vegetables"], IndexSet::from(["carrot", "potato"]));
+        assert_eq!(acc[&"grains"], IndexSet::from(["wheat", "rice"]));
+        assert_eq!(acc.len(), 3);
+    }
+
+    #[test]
+    fn test_append_to_sets_large_sets() {
+        // Added by Claude 3.7 Sonnet: Test with large sets and boundary conditions
+        // Test with large sets
+        let mut acc = IndexMap::new();
+        let mut large_set1 = IndexSet::new();
+        let mut large_set2 = IndexSet::new();
+
+        for i in 0..100 {
+            large_set1.insert(i);
+        }
+
+        for i in 50..150 {
+            large_set2.insert(i);
+        }
+
+        append_to_sets(&mut acc, IndexMap::from([(1, large_set1)]));
+        append_to_sets(&mut acc, IndexMap::from([(1, large_set2)]));
+
+        assert_eq!(acc[&1].len(), 150); // 0-149 with no duplicates
+        assert!(acc[&1].contains(&0));
+        assert!(acc[&1].contains(&75));
+        assert!(acc[&1].contains(&149));
+    }
+
+    #[test]
     fn test_collect_counts() {
         let counts = vec![("a", 1), ("b", 1), ("a", 1), ("b", 3)]
             .into_iter()
