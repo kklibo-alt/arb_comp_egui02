@@ -187,8 +187,26 @@ impl Bpe {
                 .iter_mut()
                 .zip(pair_locations_in_sequences.iter_mut())
                 .map(|(pattern, pair_locations)| {
+                    //temp debug
+                    println!();
+                    println!();
+                    println!("pattern:");
+                    println!("{:?}", pattern);
+                    println!("pair_locations:");
+                    println!("{:?}", pair_locations);
+                    println!("pair_occurrences:");
+                    println!("{:?}", pair_occurrences);
+                    println!("pair: {:?}", (id0, id1));
+                    println!("new_id: {:?}", new_id);
+
                     let locations = pair_locations.swap_remove(&(id0, id1)).unwrap_or_default();
-                    replace_pair(id0, id1, locations, pattern, new_id)
+                    println!("locations:");
+                    println!("{:?}", locations);
+                    println!("pair_locations after locations removal:");
+                    println!("{:?}", pair_locations);
+                    println!();
+
+                    dbg!(replace_pair(id0, id1, locations, pattern, new_id))
                 })
                 .collect::<Vec<_>>();
 
