@@ -1,3 +1,5 @@
+use std::usize;
+
 use crate::recode::{condense, expand, to_bytes, to_ids};
 use crate::token::{find_most_common_duplicate_id_pair, merge, Token, TokenId};
 use crate::utils::CollectCounts;
@@ -134,6 +136,14 @@ impl Bpe {
             let mut removed_pair_locations = IndexMap::<_, IndexSet<usize>>::new();
             let mut removed_pair_counts = IndexMap::new();
 
+            let mut remove_pair = |pair: (TokenId, TokenId), first_index| {
+                removed_pair_locations
+                    .entry(pair)
+                    .or_default()
+                    .insert(first_index);
+                *removed_pair_counts.entry(pair).or_default() += 1;
+            };
+
             for index0 in locations {
                 assert_eq!(Some(&id0), pattern.get(index0));
 
@@ -144,25 +154,18 @@ impl Bpe {
                 let next_token = get_next_id(pattern, index1);
 
                 if let Some((prev_id, prev_index)) = prev_token {
-                    let pair = (prev_id, id0);
-                    removed_pair_locations
-                        .entry(pair)
-                        .or_default()
-                        .insert(prev_index);
-                    *removed_pair_counts.entry(pair).or_default() += 1;
+                    remove_pair((prev_id, id0), prev_index);
                 }
 
-                if let Some((next_id, next_index)) = next_token {
-                    let pair = (id1, next_id);
-                    removed_pair_locations
-                        .entry(pair)
-                        .or_default()
-                        .insert(index1);
-                    *removed_pair_counts.entry(pair).or_default() += 1;
+                if let Some((next_id, _next_index)) = next_token {
+                    remove_pair((id1, next_id), index1);
                 }
 
-                
+                *pattern.get_mut(index0).unwrap() = replacement;
+                *pattern.get_mut(index1).unwrap() = TokenId(usize::MAX);
 
+                assert!(new_pair_locations.insert(index0));
+                new_pair_count += 1;
             }
 
             ReplacePairEffects {
