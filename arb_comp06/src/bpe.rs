@@ -187,7 +187,7 @@ impl Bpe {
                 .iter_mut()
                 .zip(pair_locations_in_sequences.iter_mut())
                 .map(|(pattern, pair_locations)| {
-                    let locations = pair_locations.swap_remove(&(id0, id1)).unwrap();
+                    let locations = pair_locations.swap_remove(&(id0, id1)).unwrap_or_default();
                     replace_pair(id0, id1, locations, pattern, new_id)
                 })
                 .collect::<Vec<_>>();
@@ -197,13 +197,15 @@ impl Bpe {
                 .zip(
                     effects
                         .iter()
-                        .flat_map(|effects| &effects.removed_pair_locations),
+                        .map(|effects| &effects.removed_pair_locations),
                 )
-                .for_each(|(pair_locations, (removed_pair, removed_locations))| {
-                    let locations = pair_locations.get_mut(removed_pair).unwrap();
-                    assert!(locations.len() >= removed_locations.len());
-                    assert!(removed_locations.iter().all(|x| locations.contains(x)));
-                    locations.retain(|x| !removed_locations.contains(x));
+                .for_each(|(pair_locations, removed_pair_locations)| {
+                    for (removed_pair, removed_locations) in removed_pair_locations {
+                        let locations = pair_locations.get_mut(removed_pair).unwrap();
+                        assert!(locations.len() >= removed_locations.len());
+                        assert!(removed_locations.iter().all(|x| locations.contains(x)));
+                        locations.retain(|x| !removed_locations.contains(x));
+                    }
                 });
 
             effects
@@ -211,7 +213,7 @@ impl Bpe {
                 .flat_map(|effects| &effects.removed_pair_counts)
                 .for_each(|(removed_pair, removed_count)| {
                     let count = pair_occurrences.get_priority(removed_pair).unwrap();
-                    assert!(count > removed_count);
+                    assert!(count >= removed_count);
                     pair_occurrences
                         .set_priority(removed_pair, count - *removed_count)
                         .unwrap();
