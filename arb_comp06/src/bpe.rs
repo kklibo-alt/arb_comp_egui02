@@ -114,6 +114,65 @@ impl Bpe {
             None
         }
 
+        #[derive(Debug)]
+        struct ReplacePairEffects {
+            new_pair_locations: IndexSet<usize>,
+            new_pair_count: usize,
+            removed_pair_locations: IndexMap<(TokenId, TokenId), IndexSet<usize>>,
+            removed_pair_counts: IndexMap<(TokenId, TokenId), usize>,
+        }
+
+        fn replace_pair(
+            id0: TokenId,
+            id1: TokenId,
+            locations: IndexSet<usize>,
+            pattern: &mut [TokenId],
+            replacement: TokenId,
+        ) -> ReplacePairEffects {
+            let mut new_pair_locations = IndexSet::new();
+            let mut new_pair_count = 0;
+            let mut removed_pair_locations = IndexMap::<_, IndexSet<usize>>::new();
+            let mut removed_pair_counts = IndexMap::new();
+
+            for index0 in locations {
+                assert_eq!(Some(&id0), pattern.get(index0));
+
+                let (token_id1, index1) = get_next_id(&pattern, index0).unwrap();
+                assert_eq!(id1, token_id1);
+
+                let prev_token = get_prev_id(pattern, index0);
+                let next_token = get_next_id(pattern, index1);
+
+                if let Some((prev_id, prev_index)) = prev_token {
+                    let pair = (prev_id, id0);
+                    removed_pair_locations
+                        .entry(pair)
+                        .or_default()
+                        .insert(prev_index);
+                    *removed_pair_counts.entry(pair).or_default() += 1;
+                }
+
+                if let Some((next_id, next_index)) = next_token {
+                    let pair = (id1, next_id);
+                    removed_pair_locations
+                        .entry(pair)
+                        .or_default()
+                        .insert(index1);
+                    *removed_pair_counts.entry(pair).or_default() += 1;
+                }
+
+                
+
+            }
+
+            ReplacePairEffects {
+                new_pair_locations,
+                new_pair_count,
+                removed_pair_locations,
+                removed_pair_counts,
+            }
+        }
+
         while let Some(((id0, id1), count)) = pair_occurrences.pop() {
             if count < 2 {
                 break;
@@ -172,8 +231,9 @@ impl Bpe {
 
                 println!("{pair_locations:?}");
 
-
-                if !pair_locations.contains_key(&(id0,id1)) {continue;}
+                if !pair_locations.contains_key(&(id0, id1)) {
+                    continue;
+                }
 
                 for index in pair_locations.get(&(id0, id1)).unwrap().clone() {
                     // for (temp?) borrow checker workaround: ensure entries in non-updating clone
