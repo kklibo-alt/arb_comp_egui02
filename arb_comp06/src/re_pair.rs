@@ -87,7 +87,7 @@ impl RePair {
         for index0 in locations {
             assert_eq!(Some(&id0), pattern.get(index0));
 
-            let (token_id1, index1) = Self::get_next_id(&pattern, index0).unwrap();
+            let (token_id1, index1) = Self::get_next_id(pattern, index0).unwrap();
             assert_eq!(id1, token_id1);
 
             let prev_token = Self::get_prev_id(pattern, index0);
