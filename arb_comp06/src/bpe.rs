@@ -183,104 +183,11 @@ impl Bpe {
             let new_id = bpe.ids_to_tokens.len();
             bpe.add_id(TokenId(new_id), Token::Merge(id0, id1));
 
-            let mut new_pair_locations_in_sequences = Vec::new();
-            let mut new_pair_count = 0;
-
             for (pattern, pair_locations) in patterns
                 .iter_mut()
                 .zip(pair_locations_in_sequences.iter_mut())
             {
-                let mut deregister_pair = |pair: &(TokenId, TokenId),
-                                           first_index: usize,
-                                           pair_locations: &mut IndexMap<
-                    (TokenId, TokenId),
-                    IndexSet<usize>,
-                >| {
-                    dbg!(pair);
-                    assert!(pair_locations
-                        .get_mut(pair)
-                        .unwrap()
-                        .swap_remove(&first_index));
-                    if pair_locations.get(pair).unwrap().is_empty() {
-                        assert!(pair_locations.swap_remove(pair).is_some());
-                    }
-
-                    let pair_count = *pair_occurrences.get_priority(pair).unwrap();
-                    assert!(pair_count > 0);
-                    if pair_count == 1 {
-                        pair_occurrences.remove(pair);
-                    } else {
-                        pair_occurrences.set_priority(pair, pair_count - 1).unwrap();
-                    }
-                };
-
-                // for the target pair: don't remove from pair_occurrences: it's already gone
-                let mut deregister_target_pair = |pair: &(TokenId, TokenId),
-                                                  first_index: usize,
-                                                  pair_locations: &mut IndexMap<
-                    (TokenId, TokenId),
-                    IndexSet<usize>,
-                >| {
-                    assert!(pair_locations
-                        .get_mut(pair)
-                        .unwrap()
-                        .swap_remove(&first_index));
-                    if pair_locations.get(pair).unwrap().is_empty() {
-                        assert!(pair_locations.swap_remove(pair).is_some());
-                    }
-                };
-
-                let mut new_pair_locations = IndexSet::<usize>::new();
-
-                println!("{pair_locations:?}");
-
-                if !pair_locations.contains_key(&(id0, id1)) {
-                    continue;
-                }
-
-                for index in pair_locations.get(&(id0, id1)).unwrap().clone() {
-                    // for (temp?) borrow checker workaround: ensure entries in non-updating clone
-                    // for this loop are still in live set
-                    if !pair_locations.get(&(id0, id1)).unwrap().contains(&index) {
-                        continue;
-                    }
-                    dbg!((id0, id1));
-
-                    let prev_id = get_prev_id(pattern, index);
-                    //let first_id = *pattern.get(index).unwrap();
-                    let (second_id, second_index) = get_next_id(pattern, index).unwrap();
-                    let next_id = get_next_id(pattern, second_index);
-
-                    if let Some((id, i)) = prev_id {
-                        deregister_pair(&(id, id0), i, pair_locations);
-                    }
-
-                    deregister_target_pair(&(id0, id1), index, pair_locations);
-
-                    if let Some((id, i)) = next_id {
-                        deregister_pair(&(id1, id), second_index, pair_locations);
-                    }
-
-                    *pattern.get_mut(index).unwrap() = TokenId(new_id);
-                    *pattern.get_mut(second_index).unwrap() = TokenId(usize::MAX);
-
-                    assert!(new_pair_locations.insert(index));
-                }
-
-                new_pair_count += new_pair_locations.len();
-                new_pair_locations_in_sequences.push(new_pair_locations);
-            }
-
-            pair_occurrences.push((id0, id1), new_pair_count);
-
-            //add new_pair_locations_in_sequences
-            for (locations, new_locations) in pair_locations_in_sequences
-                .iter_mut()
-                .zip(new_pair_locations_in_sequences.into_iter())
-            {
-                println!("{:?}", (id0, id1));
-                println!("{:?}", (&locations, &new_locations));
-                assert!(locations.insert((id0, id1), new_locations).is_none());
+            
             }
 
             /*
