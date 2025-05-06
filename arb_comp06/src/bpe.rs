@@ -256,13 +256,18 @@ impl Bpe {
                     }
                 });
 
-            pair_occurrences.push(
-                (id0, id1),
-                effects
-                    .iter()
-                    .map(|effects| &effects.new_pair_count)
-                    .sum::<usize>(),
-            );
+            effects
+                .iter()
+                .flat_map(|effects| &effects.new_pair_counts)
+                .for_each(|(new_pair, new_count)| {
+                    if let Some(&count) = pair_occurrences.get_priority(new_pair) {
+                        pair_occurrences
+                            .set_priority(new_pair, new_count + count)
+                            .unwrap();
+                    } else {
+                        pair_occurrences.push(*new_pair, *new_count);
+                    };
+                });
 
             /*
             replace all pair occurrences with merge token:
