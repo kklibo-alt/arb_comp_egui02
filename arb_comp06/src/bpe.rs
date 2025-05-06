@@ -217,6 +217,15 @@ impl Bpe {
                         .unwrap();
                 });
 
+            pair_locations_in_sequences
+                .iter_mut()
+                .zip(effects.iter().map(|effects| &effects.new_pair_locations))
+                .for_each(|(pair_locations, new_locations)| {
+                    let new_pair = (id0, id1);
+                    assert!(!pair_locations.contains_key(&new_pair));
+                    pair_locations.insert(new_pair, new_locations.clone());
+                });
+
             /*
             replace all pair occurrences with merge token:
             for each occurrence
