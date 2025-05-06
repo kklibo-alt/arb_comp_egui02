@@ -1,0 +1,225 @@
+
+    // first attempt: ignore token repetition block overcounting for now
+    pub fn new_faster(data: &[&[u8]]) -> Self {
+        let mut bpe = Self {
+            ids_to_tokens: IndexMap::new(),
+            tokens_to_ids: IndexMap::new(),
+        };
+
+        (0..=u8::MAX).for_each(|x| bpe.add_id(TokenId(x as usize), Token::Byte(x)));
+
+        let mut patterns = data.iter().map(|x| bpe.encode(x)).collect::<Vec<_>>();
+
+        /// For each token id pair in `ids`: record the index of its first element.
+        fn find_id_pairs(ids: &[TokenId]) -> IndexMap<(TokenId, TokenId), IndexSet<usize>> {
+            let mut pair_locations = IndexMap::new();
+
+            ids.windows(2).enumerate().for_each(|(i, ids)| {
+                pair_locations
+                    .entry((ids[0], ids[1]))
+                    .or_insert(IndexSet::new())
+                    .insert(i);
+            });
+
+            pair_locations
+        }
+
+        let mut pair_locations_in_sequences = patterns
+            .iter()
+            .map(|pattern| find_id_pairs(pattern))
+            .collect::<Vec<_>>();
+
+        let pair_counts = pair_locations_in_sequences
+            .iter()
+            .flatten()
+            .map(|(pair, locations)| (*pair, locations.len()))
+            .collect_counts();
+
+        let mut pair_occurrences: KeyedPriorityQueue<(TokenId, TokenId), usize> =
+            pair_counts.into_iter().collect();
+
+        //note: using TokenId of usize::MAX to indicate empty index (refine/replace?)
+        fn get_prev_id(ids: &[TokenId], index: usize) -> Option<(TokenId, usize)> {
+            for (i, &id) in ids.iter().enumerate().take(index).rev() {
+                if id != TokenId(usize::MAX) {
+                    return Some((id, i));
+                };
+            }
+            None
+        }
+
+        fn get_next_id(ids: &[TokenId], index: usize) -> Option<(TokenId, usize)> {
+            for (i, &id) in ids.iter().enumerate().skip(index + 1) {
+                if id != TokenId(usize::MAX) {
+                    return Some((id, i));
+                };
+            }
+            None
+        }
+
+        #[derive(Debug)]
+        struct ReplacePairEffects {
+            new_pair_locations: IndexMap<(TokenId, TokenId), IndexSet<usize>>,
+            new_pair_counts: IndexMap<(TokenId, TokenId), usize>,
+            removed_pair_locations: IndexMap<(TokenId, TokenId), IndexSet<usize>>,
+            removed_pair_counts: IndexMap<(TokenId, TokenId), usize>,
+        }
+
+        fn replace_pair(
+            id0: TokenId,
+            id1: TokenId,
+            locations: IndexSet<usize>,
+            pattern: &mut [TokenId],
+            replacement: TokenId,
+        ) -> ReplacePairEffects {
+            let mut new_pair_locations = IndexMap::<_, IndexSet<usize>>::new();
+            let mut new_pair_counts = IndexMap::new();
+            let mut removed_pair_locations = IndexMap::<_, IndexSet<usize>>::new();
+            let mut removed_pair_counts = IndexMap::new();
+
+            let mut remove_pair = |pair: (TokenId, TokenId), first_index| {
+                removed_pair_locations
+                    .entry(pair)
+                    .or_default()
+                    .insert(first_index);
+                *removed_pair_counts.entry(pair).or_default() += 1;
+            };
+
+            let mut add_pair = |pair: (TokenId, TokenId), first_index| {
+                new_pair_locations
+                    .entry(pair)
+                    .or_default()
+                    .insert(first_index);
+                *new_pair_counts.entry(pair).or_default() += 1;
+            };
+
+            for index0 in locations {
+                assert_eq!(Some(&id0), pattern.get(index0));
+
+                let (token_id1, index1) = get_next_id(&pattern, index0).unwrap();
+                assert_eq!(id1, token_id1);
+
+                let prev_token = get_prev_id(pattern, index0);
+                let next_token = get_next_id(pattern, index1);
+
+                if let Some((prev_id, prev_index)) = prev_token {
+                    remove_pair((prev_id, id0), prev_index);
+                    add_pair((prev_id, replacement), prev_index);
+                }
+
+                if let Some((next_id, _next_index)) = next_token {
+                    remove_pair((id1, next_id), index1);
+                    add_pair((replacement, next_id), index0);
+                }
+
+                *pattern.get_mut(index0).unwrap() = replacement;
+                *pattern.get_mut(index1).unwrap() = TokenId(usize::MAX);
+            }
+
+            ReplacePairEffects {
+                new_pair_locations,
+                new_pair_counts,
+                removed_pair_locations,
+                removed_pair_counts,
+            }
+        }
+
+        while let Some(((id0, id1), count)) = pair_occurrences.pop() {
+            if count < 2 {
+                break;
+            }
+            let new_id = TokenId(bpe.ids_to_tokens.len());
+            bpe.add_id(new_id, Token::Merge(id0, id1));
+
+            let effects = patterns
+                .iter_mut()
+                .zip(pair_locations_in_sequences.iter_mut())
+                .map(|(pattern, pair_locations)| {
+                    //temp debug
+                    println!();
+                    println!();
+                    println!("pattern:");
+                    println!("{:?}", pattern);
+                    println!("pair_locations:");
+                    println!("{:?}", pair_locations);
+                    println!("pair_occurrences:");
+                    println!("{:?}", pair_occurrences);
+                    println!("pair: {:?}", (id0, id1));
+                    println!("new_id: {:?}", new_id);
+
+                    let locations = pair_locations.swap_remove(&(id0, id1)).unwrap_or_default();
+                    println!("locations:");
+                    println!("{:?}", locations);
+                    println!("pair_locations after locations removal:");
+                    println!("{:?}", pair_locations);
+                    println!();
+
+                    dbg!(replace_pair(id0, id1, locations, pattern, new_id))
+                })
+                .collect::<Vec<_>>();
+
+            pair_locations_in_sequences
+                .iter_mut()
+                .zip(
+                    effects
+                        .iter()
+                        .map(|effects| &effects.removed_pair_locations),
+                )
+                .for_each(|(pair_locations, removed_pair_locations)| {
+                    for (removed_pair, removed_locations) in removed_pair_locations {
+                        let locations = pair_locations.get_mut(removed_pair).unwrap();
+                        assert!(locations.len() >= removed_locations.len());
+                        assert!(removed_locations.iter().all(|x| locations.contains(x)));
+                        locations.retain(|x| !removed_locations.contains(x));
+                    }
+                });
+
+            effects
+                .iter()
+                .flat_map(|effects| &effects.removed_pair_counts)
+                .for_each(|(removed_pair, removed_count)| {
+                    let count = pair_occurrences.get_priority(removed_pair).unwrap();
+                    assert!(count >= removed_count);
+                    pair_occurrences
+                        .set_priority(removed_pair, count - *removed_count)
+                        .unwrap();
+                });
+
+            pair_locations_in_sequences
+                .iter_mut()
+                .zip(effects.iter().map(|effects| &effects.new_pair_locations))
+                .for_each(|(pair_locations, new_pair_locations)| {
+                    for (new_pair, new_locations) in new_pair_locations {
+                        let locations = pair_locations.entry(*new_pair).or_default();
+                        for &new_location in new_locations {
+                            assert!(locations.insert(new_location));
+                        }
+                    }
+                });
+
+            effects
+                .iter()
+                .flat_map(|effects| &effects.new_pair_counts)
+                .for_each(|(new_pair, new_count)| {
+                    if let Some(&count) = pair_occurrences.get_priority(new_pair) {
+                        pair_occurrences
+                            .set_priority(new_pair, new_count + count)
+                            .unwrap();
+                    } else {
+                        pair_occurrences.push(*new_pair, *new_count);
+                    };
+                });
+
+            /*
+            replace all pair occurrences with merge token:
+            for each occurrence
+                identify overlapping pairs (usually 2, -1 for each edge hit)
+                remove (up to)3 pairs: replaced + neighbors
+                    fn: remove occurrence from pair priority queue (remove + decrement)
+                insert new token (+ update info for next/prev token as needed)
+            insert these new pairs into priority queue
+            */
+        }
+
+        bpe
+    }
