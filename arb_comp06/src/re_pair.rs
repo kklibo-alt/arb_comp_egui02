@@ -144,31 +144,33 @@ impl RePair {
                 let (added_pair_locations, removed_pair_locations) =
                     Self::replace_pair(id0, id1, locations, pattern, new_id);
 
-                insert_with(
-                    &mut added_pair_counts,
-                    added_pair_locations
-                        .iter()
-                        .map(|(&pair, locations)| (pair, locations.len())),
-                    |acc, count| *acc += count,
-                );
+                fn add(acc: &mut usize, x: usize) {
+                    *acc += x;
+                }
 
-                insert_with(
-                    &mut removed_pair_counts,
-                    removed_pair_locations
-                        .iter()
-                        .map(|(&pair, locations)| (pair, locations.len())),
-                    |acc, count| *acc += count,
-                );
+                fn insert_set(acc: &mut IndexSet<usize>, mut other: IndexSet<usize>) {
+                    acc.append(&mut other);
+                }
 
-                insert_with(pair_locations, added_pair_locations, |acc, mut other| {
-                    acc.append(&mut other)
-                });
-
-                remove_with(pair_locations, removed_pair_locations, |acc, other| {
+                fn remove_set(acc: &mut IndexSet<usize>, other: IndexSet<usize>) {
                     other.iter().for_each(|x| {
                         acc.swap_remove(x);
                     });
-                });
+                }
+
+                let added_pair_lengths_iter = added_pair_locations
+                    .iter()
+                    .map(|(&pair, locations)| (pair, locations.len()));
+
+                let removed_pair_lengths_iter = removed_pair_locations
+                    .iter()
+                    .map(|(&pair, locations)| (pair, locations.len()));
+
+                insert_with(&mut removed_pair_counts, removed_pair_lengths_iter, add);
+                insert_with(&mut added_pair_counts, added_pair_lengths_iter, add);
+
+                insert_with(pair_locations, added_pair_locations, insert_set);
+                remove_with(pair_locations, removed_pair_locations, remove_set);
             }
 
             added_pair_counts.iter().for_each(|(new_pair, new_count)| {
