@@ -1,5 +1,8 @@
 use indexmap::{map::Entry, IndexMap, IndexSet};
-use std::{hash::Hash, ops::AddAssign};
+use std::{
+    hash::Hash,
+    ops::{AddAssign, SubAssign},
+};
 
 use crate::token::TokenId;
 
@@ -109,14 +112,29 @@ impl FromIterator<((TokenId, TokenId), usize)> for MappedSets {
 
 impl AddAssign for MappedSets {
     fn add_assign(&mut self, rhs: Self) {
-        for (key, mut value) in rhs.0 {
+        for (key, mut set) in rhs.0 {
             match self.0.entry(key) {
                 Entry::Occupied(mut x) => {
-                    x.get_mut().append(&mut value);
+                    x.get_mut().append(&mut set);
                 }
                 Entry::Vacant(x) => {
-                    x.insert(value);
+                    x.insert(set);
                 }
+            }
+        }
+    }
+}
+
+impl SubAssign for MappedSets {
+    fn sub_assign(&mut self, rhs: Self) {
+        for (key, set) in rhs.0 {
+            match self.0.entry(key) {
+                Entry::Occupied(mut entry) => {
+                    set.iter().for_each(|item| {
+                        entry.get_mut().swap_remove(item);
+                    });
+                }
+                Entry::Vacant(_x) => {}
             }
         }
     }
