@@ -20,12 +20,13 @@ where
     acc.entry(key).and_modify(|c| *c += 1).or_insert(1);
 }
 
-pub fn insert_with<K, V, F>(acc: &mut IndexMap<K, V>, other: IndexMap<K, V>, insert: F)
+pub fn insert_with<K, V, I, F>(acc: &mut IndexMap<K, V>, iterable: I, insert: F)
 where
     K: Hash + Eq,
+    I: IntoIterator<Item = (K, V)>,
     F: Fn(&mut V, V),
 {
-    for (key, value) in other {
+    for (key, value) in iterable {
         match acc.entry(key) {
             Entry::Occupied(mut x) => {
                 insert(x.get_mut(), value);
