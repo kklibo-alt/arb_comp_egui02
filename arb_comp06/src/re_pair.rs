@@ -16,7 +16,7 @@ impl RePair {
     }
 
     /// For each token id pair in `ids`: record the index of its first element.
-    fn find_id_pairs(ids: &[TokenId]) -> IndexMap<(TokenId, TokenId), IndexSet<usize>> {
+    fn find_id_pairs(ids: &[TokenId]) -> MappedSets {
         let mut pair_locations = IndexMap::new();
 
         ids.windows(2).enumerate().for_each(|(i, ids)| {
@@ -26,7 +26,7 @@ impl RePair {
                 .insert(i);
         });
 
-        pair_locations
+        MappedSets(pair_locations)
     }
 
     //note: using TokenId of usize::MAX to indicate empty index (refine/replace?)
@@ -102,6 +102,7 @@ impl RePair {
 
         let pair_counts = pair_locations_in_sequences
             .iter()
+            .map(|x| &x.0)
             .flatten()
             .map(|(pair, locations)| (*pair, locations.len()))
             .collect_counts();
@@ -123,7 +124,10 @@ impl RePair {
                 .iter_mut()
                 .zip(pair_locations_in_sequences.iter_mut())
             {
-                let locations = pair_locations.swap_remove(&(id0, id1)).unwrap_or_default();
+                let locations = pair_locations
+                    .0
+                    .swap_remove(&(id0, id1))
+                    .unwrap_or_default();
                 let (added_pair_locations, removed_pair_locations) =
                     Self::replace_pair(id0, id1, locations, pattern, new_id);
 
@@ -154,8 +158,8 @@ impl RePair {
                 insert_with(&mut removed_pair_counts, removed_pair_lengths_iter, add);
                 insert_with(&mut added_pair_counts, added_pair_lengths_iter, add);
 
-                insert_with(pair_locations, added_pair_locations.0, insert_set);
-                remove_with(pair_locations, removed_pair_locations.0, remove_set);
+                insert_with(&mut pair_locations.0, added_pair_locations.0, insert_set);
+                remove_with(&mut pair_locations.0, removed_pair_locations.0, remove_set);
             }
 
             added_pair_counts.iter().for_each(|(new_pair, new_count)| {
