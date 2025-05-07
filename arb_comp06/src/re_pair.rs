@@ -129,10 +129,6 @@ impl RePair {
                     *acc += x;
                 }
 
-                fn insert_set(acc: &mut IndexSet<usize>, mut other: IndexSet<usize>) {
-                    acc.append(&mut other);
-                }
-
                 fn remove_set(acc: &mut IndexSet<usize>, other: IndexSet<usize>) {
                     other.iter().for_each(|x| {
                         acc.swap_remove(x);
@@ -152,7 +148,7 @@ impl RePair {
                 insert_with(&mut removed_pair_counts, removed_pair_lengths_iter, add);
                 insert_with(&mut added_pair_counts, added_pair_lengths_iter, add);
 
-                insert_with(&mut pair_locations.0, added_pair_locations.0, insert_set);
+                *pair_locations += added_pair_locations;
                 remove_with(&mut pair_locations.0, removed_pair_locations.0, remove_set);
             }
 
