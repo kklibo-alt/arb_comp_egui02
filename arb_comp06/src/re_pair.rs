@@ -181,10 +181,13 @@ impl RePair {
             for (pair_locations, effects) in
                 pair_locations_in_sequences.iter_mut().zip(effects.clone())
             {
-                added_pair_counts.extend(
-                    pair_locations
+                insert_with(
+                    &mut added_pair_counts,
+                    effects
+                        .new_pair_locations
                         .iter()
                         .map(|(&pair, locations)| (pair, locations.len())),
+                    |acc, count| *acc += count,
                 );
 
                 insert_with(
