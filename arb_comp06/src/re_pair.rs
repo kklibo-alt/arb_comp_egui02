@@ -1,6 +1,6 @@
 use crate::recode::{condense, expand, to_bytes, to_ids};
 use crate::token::{Token, TokenId};
-use crate::utils::{append_to_sets, insert_with, remove_with, CollectCounts};
+use crate::utils::{insert_with, remove_with, CollectCounts};
 use indexmap::{IndexMap, IndexSet};
 use keyed_priority_queue::KeyedPriorityQueue;
 
@@ -143,36 +143,15 @@ impl RePair {
                 .iter_mut()
                 .zip(pair_locations_in_sequences.iter_mut())
                 .map(|(pattern, pair_locations)| {
-                    //temp debug
-                    println!();
-                    println!();
-                    println!("pattern:");
-                    println!("{:?}", pattern);
-                    println!("pair_locations:");
-                    println!("{:?}", pair_locations);
-                    println!("pair_occurrences:");
-                    println!("{:?}", pair_occurrences);
-                    println!("pair: {:?}", (id0, id1));
-                    println!("new_id: {:?}", new_id);
-
                     let locations = pair_locations.swap_remove(&(id0, id1)).unwrap_or_default();
-                    println!("locations:");
-                    println!("{:?}", locations);
-                    println!("pair_locations after locations removal:");
-                    println!("{:?}", pair_locations);
-                    println!();
-
-                    dbg!(Self::replace_pair(id0, id1, locations, pattern, new_id))
+                    Self::replace_pair(id0, id1, locations, pattern, new_id)
                 })
                 .collect::<Vec<_>>();
 
             let mut added_pair_counts = IndexMap::<(TokenId, TokenId), usize>::new();
             let mut removed_pair_counts = IndexMap::<(TokenId, TokenId), usize>::new();
 
-            //temp clone
-            for (pair_locations, effects) in
-                pair_locations_in_sequences.iter_mut().zip(effects.clone())
-            {
+            for (pair_locations, effects) in pair_locations_in_sequences.iter_mut().zip(effects) {
                 insert_with(
                     &mut added_pair_counts,
                     effects
@@ -227,59 +206,6 @@ impl RePair {
                         .set_priority(removed_pair, count - *removed_count)
                         .unwrap();
                 });
-
-            /*
-            pair_locations_in_sequences
-                .iter_mut()
-                .zip(
-                    effects
-                        .iter()
-                        .map(|effects| &effects.removed_pair_locations),
-                )
-                .for_each(|(pair_locations, removed_pair_locations)| {
-                    for (removed_pair, removed_locations) in removed_pair_locations {
-                        let locations = pair_locations.get_mut(removed_pair).unwrap();
-                        assert!(locations.len() >= removed_locations.len());
-                        assert!(removed_locations.iter().all(|x| locations.contains(x)));
-                        locations.retain(|x| !removed_locations.contains(x));
-                    }
-                });
-            */
-            /*
-            effects
-                .iter()
-                .flat_map(|effects| &effects.removed_pair_counts)
-                .for_each(|(removed_pair, removed_count)| {
-                    let count = pair_occurrences.get_priority(removed_pair).unwrap();
-                    assert!(count >= removed_count);
-                    pair_occurrences
-                        .set_priority(removed_pair, count - *removed_count)
-                        .unwrap();
-                });
-            */
-            /*
-            effects
-                .iter()
-                .flat_map(|effects| &effects.new_pair_counts)
-                .for_each(|(new_pair, new_count)| {
-                    if let Some(&count) = pair_occurrences.get_priority(new_pair) {
-                        pair_occurrences
-                            .set_priority(new_pair, new_count + count)
-                            .unwrap();
-                    } else {
-                        pair_occurrences.push(*new_pair, *new_count);
-                    };
-                });
-            */
-            /*
-            replace all pair occurrences with merge token:
-            for each occurrence
-                identify overlapping pairs (usually 2, -1 for each edge hit)
-                remove (up to)3 pairs: replaced + neighbors
-                    fn: remove occurrence from pair priority queue (remove + decrement)
-                insert new token (+ update info for next/prev token as needed)
-            insert these new pairs into priority queue
-            */
         }
 
         re_pair

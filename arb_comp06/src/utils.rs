@@ -1,7 +1,4 @@
-use indexmap::{
-    map::{Entry, OccupiedEntry},
-    IndexMap, IndexSet,
-};
+use indexmap::{map::Entry, IndexMap, IndexSet};
 use std::{hash::Hash, ops::AddAssign};
 
 pub fn add_to_counts<T>(acc: &mut IndexMap<T, usize>, x: &IndexMap<T, usize>)
@@ -49,7 +46,7 @@ where
             Entry::Occupied(mut x) => {
                 remove(x.get_mut(), value);
             }
-            Entry::Vacant(x) => {}
+            Entry::Vacant(_x) => {}
         }
     }
 }
