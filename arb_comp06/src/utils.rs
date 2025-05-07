@@ -1,4 +1,7 @@
-use indexmap::{IndexMap, IndexSet};
+use indexmap::{
+    map::{Entry, OccupiedEntry},
+    IndexMap, IndexSet,
+};
 use std::{hash::Hash, ops::AddAssign};
 
 pub fn add_to_counts<T>(acc: &mut IndexMap<T, usize>, x: &IndexMap<T, usize>)
@@ -17,14 +20,33 @@ where
     acc.entry(key).and_modify(|c| *c += 1).or_insert(1);
 }
 
+pub fn insert_with<K, V, F>(acc: &mut IndexMap<K, V>, other: IndexMap<K, V>, insert: F)
+where
+    K: Hash + Eq,
+    F: Fn(&mut V, V),
+{
+    for (key, value) in other {
+        match acc.entry(key) {
+            Entry::Occupied(mut x) => {
+                insert(x.get_mut(), value);
+            }
+            Entry::Vacant(x) => {
+                x.insert(value);
+            }
+        }
+    }
+}
+
 pub fn append_to_sets<K, V>(acc: &mut IndexMap<K, IndexSet<V>>, to_add: IndexMap<K, IndexSet<V>>)
 where
     K: Hash + Eq + Copy,
     V: Hash + Eq + Copy,
 {
-    to_add.into_iter().for_each(|(key, mut set)| {
-        acc.entry(key).or_default().append(&mut set);
-    });
+    //to_add.into_iter().for_each(|(key, mut set)| {
+    //    acc.entry(key).or_default().append(&mut set);
+    //});
+
+    insert_with(acc, to_add, |acc, mut other| acc.append(&mut other));
 }
 
 pub trait CollectCounts<K, V>: Iterator<Item = (K, V)> {
