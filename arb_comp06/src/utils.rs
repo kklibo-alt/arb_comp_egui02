@@ -89,6 +89,9 @@ impl MappedSets {
     pub fn new() -> Self {
         Self::default()
     }
+    pub fn insert(&mut self, key: (TokenId, TokenId), value: usize) {
+        self.0.entry(key).or_default().insert(value);
+    }
 }
 
 #[cfg(test)]

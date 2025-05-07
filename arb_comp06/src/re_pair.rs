@@ -58,22 +58,6 @@ impl RePair {
         let mut added_pair_locations = MappedSets::new();
         let mut removed_pair_locations = MappedSets::new();
 
-        let mut remove_pair = |pair: (TokenId, TokenId), first_index| {
-            removed_pair_locations
-                .0
-                .entry(pair)
-                .or_default()
-                .insert(first_index);
-        };
-
-        let mut add_pair = |pair: (TokenId, TokenId), first_index| {
-            added_pair_locations
-                .0
-                .entry(pair)
-                .or_default()
-                .insert(first_index);
-        };
-
         for index0 in locations {
             assert_eq!(Some(&id0), pattern.get(index0));
 
@@ -84,13 +68,13 @@ impl RePair {
             let next_token = Self::get_next_id(pattern, index1);
 
             if let Some((prev_id, prev_index)) = prev_token {
-                remove_pair((prev_id, id0), prev_index);
-                add_pair((prev_id, replacement), prev_index);
+                removed_pair_locations.insert((prev_id, id0), prev_index);
+                added_pair_locations.insert((prev_id, replacement), prev_index);
             }
 
             if let Some((next_id, _next_index)) = next_token {
-                remove_pair((id1, next_id), index1);
-                add_pair((replacement, next_id), index0);
+                removed_pair_locations.insert((id1, next_id), index1);
+                added_pair_locations.insert((replacement, next_id), index0);
             }
 
             *pattern.get_mut(index0).unwrap() = replacement;
