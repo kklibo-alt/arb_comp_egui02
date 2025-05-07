@@ -1,6 +1,8 @@
 use indexmap::{map::Entry, IndexMap, IndexSet};
 use std::{hash::Hash, ops::AddAssign};
 
+use crate::token::TokenId;
+
 pub fn add_to_counts<T>(acc: &mut IndexMap<T, usize>, x: &IndexMap<T, usize>)
 where
     T: Hash + Eq + PartialEq + Copy,
@@ -80,6 +82,14 @@ pub trait CollectCounts<K, V>: Iterator<Item = (K, V)> {
     }
 }
 impl<T, K, V> CollectCounts<K, V> for T where T: Iterator<Item = (K, V)> + ?Sized {}
+
+#[derive(Debug, Default)]
+pub struct MappedSets(pub IndexMap<(TokenId, TokenId), IndexSet<usize>>);
+impl MappedSets {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
 
 #[cfg(test)]
 mod tests {

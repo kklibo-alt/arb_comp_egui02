@@ -1,6 +1,6 @@
 use crate::recode::{condense, expand, to_bytes, to_ids};
 use crate::token::{Token, TokenId};
-use crate::utils::{insert_with, remove_with, CollectCounts};
+use crate::utils::{insert_with, remove_with, CollectCounts, MappedSets};
 use indexmap::{IndexMap, IndexSet};
 use keyed_priority_queue::KeyedPriorityQueue;
 
@@ -54,15 +54,13 @@ impl RePair {
         locations: IndexSet<usize>,
         pattern: &mut [TokenId],
         replacement: TokenId,
-    ) -> (
-        IndexMap<(TokenId, TokenId), IndexSet<usize>>,
-        IndexMap<(TokenId, TokenId), IndexSet<usize>>,
-    ) {
-        let mut added_pair_locations = IndexMap::<_, IndexSet<usize>>::new();
-        let mut removed_pair_locations = IndexMap::<_, IndexSet<usize>>::new();
+    ) -> (MappedSets, MappedSets) {
+        let mut added_pair_locations = MappedSets::new();
+        let mut removed_pair_locations = MappedSets::new();
 
         let mut remove_pair = |pair: (TokenId, TokenId), first_index| {
             removed_pair_locations
+                .0
                 .entry(pair)
                 .or_default()
                 .insert(first_index);
@@ -70,6 +68,7 @@ impl RePair {
 
         let mut add_pair = |pair: (TokenId, TokenId), first_index| {
             added_pair_locations
+                .0
                 .entry(pair)
                 .or_default()
                 .insert(first_index);
@@ -159,18 +158,20 @@ impl RePair {
                 }
 
                 let added_pair_lengths_iter = added_pair_locations
+                    .0
                     .iter()
                     .map(|(&pair, locations)| (pair, locations.len()));
 
                 let removed_pair_lengths_iter = removed_pair_locations
+                    .0
                     .iter()
                     .map(|(&pair, locations)| (pair, locations.len()));
 
                 insert_with(&mut removed_pair_counts, removed_pair_lengths_iter, add);
                 insert_with(&mut added_pair_counts, added_pair_lengths_iter, add);
 
-                insert_with(pair_locations, added_pair_locations, insert_set);
-                remove_with(pair_locations, removed_pair_locations, remove_set);
+                insert_with(pair_locations, added_pair_locations.0, insert_set);
+                remove_with(pair_locations, removed_pair_locations.0, remove_set);
             }
 
             added_pair_counts.iter().for_each(|(new_pair, new_count)| {
