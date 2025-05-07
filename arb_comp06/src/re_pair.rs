@@ -1,6 +1,6 @@
 use crate::recode::{condense, expand, to_bytes, to_ids};
 use crate::token::{Token, TokenId};
-use crate::utils::{append_to_sets, insert_with, CollectCounts};
+use crate::utils::{append_to_sets, insert_with, remove_with, CollectCounts};
 use indexmap::{IndexMap, IndexSet};
 use keyed_priority_queue::KeyedPriorityQueue;
 
@@ -191,6 +191,15 @@ impl RePair {
                 );
 
                 insert_with(
+                    &mut removed_pair_counts,
+                    effects
+                        .removed_pair_locations
+                        .iter()
+                        .map(|(&pair, locations)| (pair, locations.len())),
+                    |acc, count| *acc += count,
+                );
+
+                insert_with(
                     pair_locations,
                     effects.new_pair_locations,
                     |acc, mut other| acc.append(&mut other),
@@ -206,6 +215,16 @@ impl RePair {
                     pair_occurrences.push(*new_pair, *new_count);
                 };
             });
+
+            removed_pair_counts
+                .iter()
+                .for_each(|(removed_pair, removed_count)| {
+                    let count = pair_occurrences.get_priority(removed_pair).unwrap();
+                    assert!(count >= removed_count);
+                    pair_occurrences
+                        .set_priority(removed_pair, count - *removed_count)
+                        .unwrap();
+                });
 
             pair_locations_in_sequences
                 .iter_mut()
@@ -223,6 +242,7 @@ impl RePair {
                     }
                 });
 
+            /*
             effects
                 .iter()
                 .flat_map(|effects| &effects.removed_pair_counts)
@@ -233,7 +253,7 @@ impl RePair {
                         .set_priority(removed_pair, count - *removed_count)
                         .unwrap();
                 });
-
+            */
             /*
             effects
                 .iter()
