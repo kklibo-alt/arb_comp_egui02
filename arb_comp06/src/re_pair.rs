@@ -9,12 +9,6 @@ pub struct RePair {
     tokens_to_ids: IndexMap<Token, TokenId>,
 }
 
-#[derive(Debug, Clone)]
-struct ReplacePairEffects {
-    new_pair_locations: IndexMap<(TokenId, TokenId), IndexSet<usize>>,
-    removed_pair_locations: IndexMap<(TokenId, TokenId), IndexSet<usize>>,
-}
-
 impl RePair {
     fn add_id(&mut self, id: TokenId, token: Token) {
         self.ids_to_tokens.insert(id, token);
@@ -60,8 +54,11 @@ impl RePair {
         locations: IndexSet<usize>,
         pattern: &mut [TokenId],
         replacement: TokenId,
-    ) -> ReplacePairEffects {
-        let mut new_pair_locations = IndexMap::<_, IndexSet<usize>>::new();
+    ) -> (
+        IndexMap<(TokenId, TokenId), IndexSet<usize>>,
+        IndexMap<(TokenId, TokenId), IndexSet<usize>>,
+    ) {
+        let mut added_pair_locations = IndexMap::<_, IndexSet<usize>>::new();
         let mut removed_pair_locations = IndexMap::<_, IndexSet<usize>>::new();
 
         let mut remove_pair = |pair: (TokenId, TokenId), first_index| {
@@ -72,7 +69,7 @@ impl RePair {
         };
 
         let mut add_pair = |pair: (TokenId, TokenId), first_index| {
-            new_pair_locations
+            added_pair_locations
                 .entry(pair)
                 .or_default()
                 .insert(first_index);
@@ -101,10 +98,7 @@ impl RePair {
             *pattern.get_mut(index1).unwrap() = TokenId(usize::MAX);
         }
 
-        ReplacePairEffects {
-            new_pair_locations,
-            removed_pair_locations,
-        }
+        (added_pair_locations, removed_pair_locations)
     }
 
     // first attempt: ignore token repetition block overcounting for now
@@ -147,12 +141,12 @@ impl RePair {
                 .zip(pair_locations_in_sequences.iter_mut())
             {
                 let locations = pair_locations.swap_remove(&(id0, id1)).unwrap_or_default();
-                let effects = Self::replace_pair(id0, id1, locations, pattern, new_id);
+                let (added_pair_locations, removed_pair_locations) =
+                    Self::replace_pair(id0, id1, locations, pattern, new_id);
 
                 insert_with(
                     &mut added_pair_counts,
-                    effects
-                        .new_pair_locations
+                    added_pair_locations
                         .iter()
                         .map(|(&pair, locations)| (pair, locations.len())),
                     |acc, count| *acc += count,
@@ -160,28 +154,21 @@ impl RePair {
 
                 insert_with(
                     &mut removed_pair_counts,
-                    effects
-                        .removed_pair_locations
+                    removed_pair_locations
                         .iter()
                         .map(|(&pair, locations)| (pair, locations.len())),
                     |acc, count| *acc += count,
                 );
 
-                insert_with(
-                    pair_locations,
-                    effects.new_pair_locations,
-                    |acc, mut other| acc.append(&mut other),
-                );
+                insert_with(pair_locations, added_pair_locations, |acc, mut other| {
+                    acc.append(&mut other)
+                });
 
-                remove_with(
-                    pair_locations,
-                    effects.removed_pair_locations,
-                    |acc, other| {
-                        other.iter().for_each(|x| {
-                            acc.swap_remove(x);
-                        });
-                    },
-                );
+                remove_with(pair_locations, removed_pair_locations, |acc, other| {
+                    other.iter().for_each(|x| {
+                        acc.swap_remove(x);
+                    });
+                });
             }
 
             added_pair_counts.iter().for_each(|(new_pair, new_count)| {
