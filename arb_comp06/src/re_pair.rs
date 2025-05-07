@@ -204,6 +204,16 @@ impl RePair {
                     effects.new_pair_locations,
                     |acc, mut other| acc.append(&mut other),
                 );
+
+                remove_with(
+                    pair_locations,
+                    effects.removed_pair_locations,
+                    |acc, other| {
+                        other.iter().for_each(|x| {
+                            acc.swap_remove(x);
+                        });
+                    },
+                );
             }
 
             added_pair_counts.iter().for_each(|(new_pair, new_count)| {
@@ -226,6 +236,7 @@ impl RePair {
                         .unwrap();
                 });
 
+            /*
             pair_locations_in_sequences
                 .iter_mut()
                 .zip(
@@ -241,7 +252,7 @@ impl RePair {
                         locations.retain(|x| !removed_locations.contains(x));
                     }
                 });
-
+            */
             /*
             effects
                 .iter()

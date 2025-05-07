@@ -38,6 +38,22 @@ where
     }
 }
 
+pub fn remove_with<K, V, I, F>(acc: &mut IndexMap<K, V>, iterable: I, remove: F)
+where
+    K: Hash + Eq,
+    I: IntoIterator<Item = (K, V)>,
+    F: Fn(&mut V, V),
+{
+    for (key, value) in iterable {
+        match acc.entry(key) {
+            Entry::Occupied(mut x) => {
+                remove(x.get_mut(), value);
+            }
+            Entry::Vacant(x) => {}
+        }
+    }
+}
+
 pub fn append_to_sets<K, V>(acc: &mut IndexMap<K, IndexSet<V>>, to_add: IndexMap<K, IndexSet<V>>)
 where
     K: Hash + Eq + Copy,
