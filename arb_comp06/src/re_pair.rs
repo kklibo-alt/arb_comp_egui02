@@ -174,16 +174,35 @@ impl RePair {
                 })
                 .collect::<Vec<_>>();
 
+            let mut added_pair_counts = IndexMap::<(TokenId, TokenId), usize>::new();
+            let mut removed_pair_counts = IndexMap::<(TokenId, TokenId), usize>::new();
+
             //temp clone
             for (pair_locations, effects) in
                 pair_locations_in_sequences.iter_mut().zip(effects.clone())
             {
+                added_pair_counts.extend(
+                    pair_locations
+                        .iter()
+                        .map(|(&pair, locations)| (pair, locations.len())),
+                );
+
                 insert_with(
                     pair_locations,
                     effects.new_pair_locations,
                     |acc, mut other| acc.append(&mut other),
                 );
             }
+
+            added_pair_counts.iter().for_each(|(new_pair, new_count)| {
+                if let Some(&count) = pair_occurrences.get_priority(new_pair) {
+                    pair_occurrences
+                        .set_priority(new_pair, new_count + count)
+                        .unwrap();
+                } else {
+                    pair_occurrences.push(*new_pair, *new_count);
+                };
+            });
 
             pair_locations_in_sequences
                 .iter_mut()
@@ -212,6 +231,7 @@ impl RePair {
                         .unwrap();
                 });
 
+            /*
             effects
                 .iter()
                 .flat_map(|effects| &effects.new_pair_counts)
@@ -224,7 +244,7 @@ impl RePair {
                         pair_occurrences.push(*new_pair, *new_count);
                     };
                 });
-
+            */
             /*
             replace all pair occurrences with merge token:
             for each occurrence
