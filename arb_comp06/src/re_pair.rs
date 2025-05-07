@@ -17,16 +17,10 @@ impl RePair {
 
     /// For each token id pair in `ids`: record the index of its first element.
     fn find_id_pairs(ids: &[TokenId]) -> MappedSets {
-        let mut pair_locations = IndexMap::new();
-
-        ids.windows(2).enumerate().for_each(|(i, ids)| {
-            pair_locations
-                .entry((ids[0], ids[1]))
-                .or_insert(IndexSet::new())
-                .insert(i);
-        });
-
-        MappedSets(pair_locations)
+        ids.windows(2)
+            .enumerate()
+            .map(|(i, ids)| ((ids[0], ids[1]), i))
+            .collect()
     }
 
     //note: using TokenId of usize::MAX to indicate empty index (refine/replace?)

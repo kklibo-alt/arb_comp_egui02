@@ -1,4 +1,5 @@
 use indexmap::{map::Entry, IndexMap, IndexSet};
+use serde::de::value;
 use std::{hash::Hash, ops::AddAssign};
 
 use crate::token::TokenId;
@@ -91,6 +92,19 @@ impl MappedSets {
     }
     pub fn insert(&mut self, key: (TokenId, TokenId), value: usize) {
         self.0.entry(key).or_default().insert(value);
+    }
+    pub fn extend<T: IntoIterator<Item = ((TokenId, TokenId), usize)>>(&mut self, iter: T) {
+        iter.into_iter().for_each(|(key, value)| {
+            self.insert(key, value);
+        });
+    }
+}
+
+impl FromIterator<((TokenId, TokenId), usize)> for MappedSets {
+    fn from_iter<T: IntoIterator<Item = ((TokenId, TokenId), usize)>>(iter: T) -> Self {
+        let mut x = Self::default();
+        x.extend(iter);
+        x
     }
 }
 
