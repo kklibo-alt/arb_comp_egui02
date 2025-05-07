@@ -12,9 +12,7 @@ pub struct RePair {
 #[derive(Debug, Clone)]
 struct ReplacePairEffects {
     new_pair_locations: IndexMap<(TokenId, TokenId), IndexSet<usize>>,
-    new_pair_counts: IndexMap<(TokenId, TokenId), usize>,
     removed_pair_locations: IndexMap<(TokenId, TokenId), IndexSet<usize>>,
-    removed_pair_counts: IndexMap<(TokenId, TokenId), usize>,
 }
 
 impl RePair {
@@ -64,16 +62,13 @@ impl RePair {
         replacement: TokenId,
     ) -> ReplacePairEffects {
         let mut new_pair_locations = IndexMap::<_, IndexSet<usize>>::new();
-        let mut new_pair_counts = IndexMap::new();
         let mut removed_pair_locations = IndexMap::<_, IndexSet<usize>>::new();
-        let mut removed_pair_counts = IndexMap::new();
 
         let mut remove_pair = |pair: (TokenId, TokenId), first_index| {
             removed_pair_locations
                 .entry(pair)
                 .or_default()
                 .insert(first_index);
-            *removed_pair_counts.entry(pair).or_default() += 1;
         };
 
         let mut add_pair = |pair: (TokenId, TokenId), first_index| {
@@ -81,7 +76,6 @@ impl RePair {
                 .entry(pair)
                 .or_default()
                 .insert(first_index);
-            *new_pair_counts.entry(pair).or_default() += 1;
         };
 
         for index0 in locations {
@@ -109,9 +103,7 @@ impl RePair {
 
         ReplacePairEffects {
             new_pair_locations,
-            new_pair_counts,
             removed_pair_locations,
-            removed_pair_counts,
         }
     }
 
