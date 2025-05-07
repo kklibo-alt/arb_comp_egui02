@@ -1,6 +1,6 @@
 use crate::recode::{condense, expand, to_bytes, to_ids};
 use crate::token::{Token, TokenId};
-use crate::utils::CollectCounts;
+use crate::utils::{append_to_sets, insert_with, CollectCounts};
 use indexmap::{IndexMap, IndexSet};
 use keyed_priority_queue::KeyedPriorityQueue;
 
@@ -9,7 +9,7 @@ pub struct RePair {
     tokens_to_ids: IndexMap<Token, TokenId>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct ReplacePairEffects {
     new_pair_locations: IndexMap<(TokenId, TokenId), IndexSet<usize>>,
     new_pair_counts: IndexMap<(TokenId, TokenId), usize>,
@@ -174,6 +174,17 @@ impl RePair {
                 })
                 .collect::<Vec<_>>();
 
+            //temp clone
+            for (pair_locations, effects) in
+                pair_locations_in_sequences.iter_mut().zip(effects.clone())
+            {
+                insert_with(
+                    pair_locations,
+                    effects.new_pair_locations,
+                    |acc, mut other| acc.append(&mut other),
+                );
+            }
+
             pair_locations_in_sequences
                 .iter_mut()
                 .zip(
@@ -199,18 +210,6 @@ impl RePair {
                     pair_occurrences
                         .set_priority(removed_pair, count - *removed_count)
                         .unwrap();
-                });
-
-            pair_locations_in_sequences
-                .iter_mut()
-                .zip(effects.iter().map(|effects| &effects.new_pair_locations))
-                .for_each(|(pair_locations, new_pair_locations)| {
-                    for (new_pair, new_locations) in new_pair_locations {
-                        let locations = pair_locations.entry(*new_pair).or_default();
-                        for &new_location in new_locations {
-                            assert!(locations.insert(new_location));
-                        }
-                    }
                 });
 
             effects
