@@ -139,19 +139,16 @@ impl RePair {
             let new_id = TokenId(re_pair.ids_to_tokens.len());
             re_pair.add_id(new_id, Token::Merge(id0, id1));
 
-            let effects = patterns
-                .iter_mut()
-                .zip(pair_locations_in_sequences.iter_mut())
-                .map(|(pattern, pair_locations)| {
-                    let locations = pair_locations.swap_remove(&(id0, id1)).unwrap_or_default();
-                    Self::replace_pair(id0, id1, locations, pattern, new_id)
-                })
-                .collect::<Vec<_>>();
-
             let mut added_pair_counts = IndexMap::<(TokenId, TokenId), usize>::new();
             let mut removed_pair_counts = IndexMap::<(TokenId, TokenId), usize>::new();
 
-            for (pair_locations, effects) in pair_locations_in_sequences.iter_mut().zip(effects) {
+            for (pattern, pair_locations) in patterns
+                .iter_mut()
+                .zip(pair_locations_in_sequences.iter_mut())
+            {
+                let locations = pair_locations.swap_remove(&(id0, id1)).unwrap_or_default();
+                let effects = Self::replace_pair(id0, id1, locations, pattern, new_id);
+
                 insert_with(
                     &mut added_pair_counts,
                     effects
