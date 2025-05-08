@@ -1,6 +1,6 @@
 use crate::recode::{condense, expand, to_bytes, to_ids};
 use crate::token::{Token, TokenId};
-use crate::utils::{insert_with, remove_with, CollectCounts, MappedSets};
+use crate::utils::{CollectCounts, MappedSets};
 use indexmap::{IndexMap, IndexSet};
 use keyed_priority_queue::KeyedPriorityQueue;
 
@@ -111,9 +111,6 @@ impl RePair {
             let new_id = TokenId(re_pair.ids_to_tokens.len());
             re_pair.add_id(new_id, Token::Merge(id0, id1));
 
-            let mut added_pair_counts = IndexMap::<(TokenId, TokenId), usize>::new();
-            let mut removed_pair_counts = IndexMap::<(TokenId, TokenId), usize>::new();
-
             for (pattern, pair_locations) in patterns
                 .iter_mut()
                 .zip(pair_locations_in_sequences.iter_mut())
@@ -124,23 +121,6 @@ impl RePair {
                     .unwrap_or_default();
                 let (added_pair_locations, removed_pair_locations) =
                     Self::replace_pair(id0, id1, locations, pattern, new_id);
-
-                fn add(acc: &mut usize, x: usize) {
-                    *acc += x;
-                }
-
-                let added_pair_lengths_iter = added_pair_locations
-                    .0
-                    .iter()
-                    .map(|(&pair, locations)| (pair, locations.len()));
-
-                let removed_pair_lengths_iter = removed_pair_locations
-                    .0
-                    .iter()
-                    .map(|(&pair, locations)| (pair, locations.len()));
-
-                insert_with(&mut removed_pair_counts, removed_pair_lengths_iter, add);
-                insert_with(&mut added_pair_counts, added_pair_lengths_iter, add);
 
                 added_pair_locations
                     .lengths()
