@@ -88,10 +88,30 @@ impl<T, K, V> CollectCounts<K, V> for T where T: Iterator<Item = (K, V)> + ?Size
 
 #[derive(Debug, Default)]
 pub struct MappedSets(pub IndexMap<(TokenId, TokenId), IndexSet<usize>>);
+
+pub struct Lengths<'a> {
+    iter: indexmap::map::Iter<'a, (TokenId, TokenId), IndexSet<usize>>,
+}
+
+impl<'a> Iterator for Lengths<'a> {
+    type Item = ((TokenId, TokenId), usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|(&key, set)| (key, set.len()))
+    }
+}
+
 impl MappedSets {
     pub fn new() -> Self {
         Self::default()
     }
+
+    pub fn lengths(&self) -> Lengths {
+        Lengths {
+            iter: self.0.iter(),
+        }
+    }
+
     pub fn insert(&mut self, key: (TokenId, TokenId), value: usize) {
         self.0.entry(key).or_default().insert(value);
     }
