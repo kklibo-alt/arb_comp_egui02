@@ -1,6 +1,6 @@
 use crate::recode::{condense, expand, to_bytes, to_ids};
 use crate::token::{Token, TokenId};
-use crate::utils::{decrease_priorities, increase_priorities, CollectCounts, MappedSets};
+use crate::utils::{decrease_priorities, increase_priorities, MappedSets};
 use indexmap::{IndexMap, IndexSet};
 use keyed_priority_queue::KeyedPriorityQueue;
 
@@ -94,15 +94,13 @@ impl RePair {
             .map(|pattern| Self::find_id_pairs(pattern))
             .collect::<Vec<_>>();
 
-        let pair_counts = pair_locations_in_sequences
-            .iter()
-            .map(|x| &x.0)
-            .flatten()
-            .map(|(pair, locations)| (*pair, locations.len()))
-            .collect_counts();
-
         let mut pair_occurrences: KeyedPriorityQueue<(TokenId, TokenId), usize> =
-            pair_counts.into_iter().collect();
+            KeyedPriorityQueue::new();
+
+        increase_priorities(
+            &mut pair_occurrences,
+            pair_locations_in_sequences.iter().flat_map(|x| x.lengths()),
+        );
 
         while let Some(((id0, id1), count)) = pair_occurrences.pop() {
             if count < 2 {
@@ -115,18 +113,16 @@ impl RePair {
                 .iter_mut()
                 .zip(pair_locations_in_sequences.iter_mut())
             {
-                let locations = pair_locations
-                    .0
-                    .swap_remove(&(id0, id1))
-                    .unwrap_or_default();
-                let (added_pair_locations, removed_pair_locations) =
-                    Self::replace_pair(id0, id1, locations, pattern, new_id);
+                if let Some(locations) = pair_locations.0.swap_remove(&(id0, id1)) {
+                    let (added_pair_locations, removed_pair_locations) =
+                        Self::replace_pair(id0, id1, locations, pattern, new_id);
 
-                increase_priorities(&mut pair_occurrences, added_pair_locations.lengths());
-                decrease_priorities(&mut pair_occurrences, removed_pair_locations.lengths());
+                    increase_priorities(&mut pair_occurrences, added_pair_locations.lengths());
+                    decrease_priorities(&mut pair_occurrences, removed_pair_locations.lengths());
 
-                *pair_locations += added_pair_locations;
-                *pair_locations -= removed_pair_locations;
+                    *pair_locations += added_pair_locations;
+                    *pair_locations -= removed_pair_locations;
+                }
             }
         }
 
