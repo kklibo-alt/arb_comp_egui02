@@ -142,29 +142,31 @@ impl RePair {
                 insert_with(&mut removed_pair_counts, removed_pair_lengths_iter, add);
                 insert_with(&mut added_pair_counts, added_pair_lengths_iter, add);
 
+                added_pair_locations
+                    .lengths()
+                    .for_each(|(new_pair, new_count)| {
+                        if let Some(&count) = pair_occurrences.get_priority(new_pair) {
+                            pair_occurrences
+                                .set_priority(new_pair, new_count + count)
+                                .unwrap();
+                        } else {
+                            pair_occurrences.push(*new_pair, new_count);
+                        };
+                    });
+
+                removed_pair_locations
+                    .lengths()
+                    .for_each(|(removed_pair, removed_count)| {
+                        let count = pair_occurrences.get_priority(removed_pair).unwrap();
+                        assert!(*count >= removed_count);
+                        pair_occurrences
+                            .set_priority(removed_pair, count - removed_count)
+                            .unwrap();
+                    });
+
                 *pair_locations += added_pair_locations;
                 *pair_locations -= removed_pair_locations;
             }
-
-            added_pair_counts.iter().for_each(|(new_pair, new_count)| {
-                if let Some(&count) = pair_occurrences.get_priority(new_pair) {
-                    pair_occurrences
-                        .set_priority(new_pair, new_count + count)
-                        .unwrap();
-                } else {
-                    pair_occurrences.push(*new_pair, *new_count);
-                };
-            });
-
-            removed_pair_counts
-                .iter()
-                .for_each(|(removed_pair, removed_count)| {
-                    let count = pair_occurrences.get_priority(removed_pair).unwrap();
-                    assert!(count >= removed_count);
-                    pair_occurrences
-                        .set_priority(removed_pair, count - *removed_count)
-                        .unwrap();
-                });
         }
 
         re_pair

@@ -94,10 +94,10 @@ pub struct Lengths<'a> {
 }
 
 impl<'a> Iterator for Lengths<'a> {
-    type Item = ((TokenId, TokenId), usize);
+    type Item = (&'a (TokenId, TokenId), usize);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|(&key, set)| (key, set.len()))
+        self.iter.next().map(|(key, set)| (key, set.len()))
     }
 }
 
