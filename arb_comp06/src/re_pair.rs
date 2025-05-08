@@ -16,7 +16,7 @@ impl RePair {
     }
 
     /// For each token id pair in `ids`: record the index of its first element.
-    fn find_id_pairs(ids: &[TokenId]) -> MappedSets {
+    fn record_id_pairs(ids: &[TokenId]) -> MappedSets {
         ids.windows(2)
             .enumerate()
             .map(|(i, ids)| ((ids[0], ids[1]), i))
@@ -87,22 +87,22 @@ impl RePair {
 
         (0..=u8::MAX).for_each(|x| re_pair.add_id(TokenId(x as usize), Token::Byte(x)));
 
-        let mut patterns = data.iter().map(|x| re_pair.encode(x)).collect::<Vec<_>>();
+        let mut patterns: Vec<Vec<TokenId>> = data.iter().map(|x| re_pair.encode(x)).collect();
 
-        let mut pair_locations_in_sequences = patterns
+        let mut pair_locations_in_patterns: Vec<MappedSets> = patterns
             .iter()
-            .map(|pattern| Self::find_id_pairs(pattern))
-            .collect::<Vec<_>>();
+            .map(|pattern| Self::record_id_pairs(pattern))
+            .collect();
 
-        let mut pair_occurrences: KeyedPriorityQueue<(TokenId, TokenId), usize> =
+        let mut pair_counts: KeyedPriorityQueue<(TokenId, TokenId), usize> =
             KeyedPriorityQueue::new();
 
         increase_priorities(
-            &mut pair_occurrences,
-            pair_locations_in_sequences.iter().flat_map(|x| x.lengths()),
+            &mut pair_counts,
+            pair_locations_in_patterns.iter().flat_map(|x| x.lengths()),
         );
 
-        while let Some(((id0, id1), count)) = pair_occurrences.pop() {
+        while let Some(((id0, id1), count)) = pair_counts.pop() {
             if count < 2 {
                 break;
             }
@@ -111,14 +111,14 @@ impl RePair {
 
             for (pattern, pair_locations) in patterns
                 .iter_mut()
-                .zip(pair_locations_in_sequences.iter_mut())
+                .zip(pair_locations_in_patterns.iter_mut())
             {
                 if let Some(locations) = pair_locations.0.swap_remove(&(id0, id1)) {
                     let (added_pair_locations, removed_pair_locations) =
                         Self::replace_pair(id0, id1, locations, pattern, new_id);
 
-                    increase_priorities(&mut pair_occurrences, added_pair_locations.lengths());
-                    decrease_priorities(&mut pair_occurrences, removed_pair_locations.lengths());
+                    increase_priorities(&mut pair_counts, added_pair_locations.lengths());
+                    decrease_priorities(&mut pair_counts, removed_pair_locations.lengths());
 
                     *pair_locations += added_pair_locations;
                     *pair_locations -= removed_pair_locations;
