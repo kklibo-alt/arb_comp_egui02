@@ -106,6 +106,30 @@ pub fn increase_priorities<'a, I>(
     }
 }
 
+pub fn decrease_priorities<'a, I>(
+    acc: &mut KeyedPriorityQueue<(TokenId, TokenId), usize>,
+    iterable: I,
+) where
+    I: Iterator<Item = (&'a (TokenId, TokenId), usize)>,
+{
+    for (&key, value) in iterable {
+        match acc.entry(key) {
+            keyed_priority_queue::Entry::Occupied(entry) => {
+                let current = *entry.get_priority();
+                if current >= value {
+                    entry.set_priority(current - value);
+                } else {
+                    entry.set_priority(0);
+                    panic!("temp panic: overdrawn priority");
+                }
+            }
+            keyed_priority_queue::Entry::Vacant(_entry) => {
+                panic!("temp panic: decreasing absent priority");
+            }
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct MappedSets(pub IndexMap<(TokenId, TokenId), IndexSet<usize>>);
 
