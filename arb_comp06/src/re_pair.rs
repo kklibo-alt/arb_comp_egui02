@@ -1,6 +1,6 @@
 use crate::recode::{condense, expand, to_bytes, to_ids};
 use crate::token::{Token, TokenId};
-use crate::utils::{CollectCounts, MappedSets};
+use crate::utils::{increase_priorities, CollectCounts, MappedSets};
 use indexmap::{IndexMap, IndexSet};
 use keyed_priority_queue::KeyedPriorityQueue;
 
@@ -122,17 +122,7 @@ impl RePair {
                 let (added_pair_locations, removed_pair_locations) =
                     Self::replace_pair(id0, id1, locations, pattern, new_id);
 
-                added_pair_locations
-                    .lengths()
-                    .for_each(|(new_pair, new_count)| {
-                        if let Some(&count) = pair_occurrences.get_priority(new_pair) {
-                            pair_occurrences
-                                .set_priority(new_pair, new_count + count)
-                                .unwrap();
-                        } else {
-                            pair_occurrences.push(*new_pair, new_count);
-                        };
-                    });
+                increase_priorities(&mut pair_occurrences, added_pair_locations.lengths());
 
                 removed_pair_locations
                     .lengths()

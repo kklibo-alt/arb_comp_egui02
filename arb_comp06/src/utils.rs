@@ -1,4 +1,5 @@
 use indexmap::{map::Entry, IndexMap, IndexSet};
+use keyed_priority_queue::KeyedPriorityQueue;
 use std::{
     hash::Hash,
     ops::{AddAssign, SubAssign},
@@ -85,6 +86,25 @@ pub trait CollectCounts<K, V>: Iterator<Item = (K, V)> {
     }
 }
 impl<T, K, V> CollectCounts<K, V> for T where T: Iterator<Item = (K, V)> + ?Sized {}
+
+pub fn increase_priorities<'a, I>(
+    acc: &mut KeyedPriorityQueue<(TokenId, TokenId), usize>,
+    iterable: I,
+) where
+    I: Iterator<Item = (&'a (TokenId, TokenId), usize)>,
+{
+    for (&key, value) in iterable {
+        match acc.entry(key) {
+            keyed_priority_queue::Entry::Occupied(entry) => {
+                let current = *entry.get_priority();
+                entry.set_priority(current + value);
+            }
+            keyed_priority_queue::Entry::Vacant(entry) => {
+                entry.set_priority(value);
+            }
+        }
+    }
+}
 
 #[derive(Debug, Default)]
 pub struct MappedSets(pub IndexMap<(TokenId, TokenId), IndexSet<usize>>);
