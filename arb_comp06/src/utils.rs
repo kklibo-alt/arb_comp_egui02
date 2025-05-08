@@ -119,7 +119,7 @@ pub fn decrease_priorities<'a, I>(
                 if current >= value {
                     entry.set_priority(current - value);
                 } else {
-                    entry.set_priority(0);
+                    entry.remove();
                     panic!("temp panic: overdrawn priority");
                 }
             }
@@ -197,6 +197,9 @@ impl SubAssign for MappedSets {
                     set.iter().for_each(|item| {
                         entry.get_mut().swap_remove(item);
                     });
+                    if entry.get().is_empty() {
+                        entry.swap_remove();
+                    }
                 }
                 Entry::Vacant(_x) => {}
             }
