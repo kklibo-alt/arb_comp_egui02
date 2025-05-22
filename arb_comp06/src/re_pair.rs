@@ -189,4 +189,13 @@ mod tests {
             vec![1, 2, 3, 2, 3, 4]
         );
     }
+
+    #[test]
+    fn test_repeating_blocks() {
+        let re_pair = RePair::new(&[&[1, 2, 0, 0, 0, 1, 2, 0, 0, 0, 1, 2]]);
+        assert_eq!(
+            re_pair.encode(&[1, 2, 0, 0]),
+            vec![TokenId(256), TokenId(257),]
+        );
+    }
 }
