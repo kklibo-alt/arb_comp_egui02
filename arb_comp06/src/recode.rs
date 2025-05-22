@@ -125,7 +125,7 @@ mod tests {
         println!("{:?}", range);
 
         let range_vec = range.iter().copied().collect::<Vec<_>>();
-        print_tokens(range_vec, bpe, |id| false);
+        print_tokens(range_vec, bpe, |_id| false);
 
         let merge_if = |id0: TokenId, id1: TokenId| -> Option<TokenId> {
             bpe.tokens_to_ids()
@@ -157,7 +157,7 @@ mod tests {
 
         let mut pattern2 = pattern1.clone();
         rand::thread_rng().fill_bytes(&mut pattern2[8..16]);
-        let pattern2 = &pattern2;
+        let _pattern2 = &pattern2;
 
         let pattern1 = &[
             235, 4, 39, 149, 209, 252, 162, 130, 117, 122, 38, 174, 226, 121, 100, 248, 135, 230,
