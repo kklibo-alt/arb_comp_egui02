@@ -5,6 +5,11 @@ use indexmap::IndexMap;
 pub struct Bpe {
     ids_to_tokens: IndexMap<TokenId, Token>,
     tokens_to_ids: IndexMap<Token, TokenId>,
+    pub init_in_progress: Option<InitInProgress>,
+}
+
+pub struct InitInProgress {
+    patterns: Vec<Vec<TokenId>>,
 }
 
 impl Bpe {
@@ -22,34 +27,58 @@ impl Bpe {
     }
 
     pub fn new(data: &[&[u8]]) -> Self {
+        let mut bpe = Self::new_iterative(data);
+
+        while bpe.init_in_progress.is_some() {
+            bpe.init_step(None::<fn(usize)>);
+        }
+
+        bpe
+    }
+
+    pub fn new_iterative(data: &[&[u8]]) -> Self {
         let mut bpe = Self {
             ids_to_tokens: IndexMap::new(),
             tokens_to_ids: IndexMap::new(),
+            init_in_progress: None,
         };
 
         (0..=u8::MAX).for_each(|x| bpe.add_id(TokenId(x as usize), Token::Byte(x)));
 
-        let mut patterns = data.iter().map(|x| bpe.encode(x)).collect::<Vec<_>>();
+        let patterns = data.iter().map(|x| bpe.encode(x)).collect::<Vec<_>>();
 
-        while let Some(((id0, id1), _count)) = find_most_common_duplicate_id_pair(patterns.iter()) {
-            let new_id = bpe.ids_to_tokens.len();
-            bpe.add_id(TokenId(new_id), Token::Merge(id0, id1));
-
-            let merge_if = |current_id, next_id| {
-                if current_id == id0 && next_id == id1 {
-                    Some(TokenId(new_id))
-                } else {
-                    None
-                }
-            };
-
-            patterns = patterns
-                .iter()
-                .map(|pattern| merge(pattern.iter().copied(), merge_if))
-                .collect();
-        }
-
+        bpe.init_in_progress = Some(InitInProgress { patterns });
         bpe
+    }
+
+    pub fn init_step(&mut self, new_id_callback: Option<impl Fn(usize)>) {
+        if let Some(mut init_in_progress) = self.init_in_progress.take() {
+            let patterns = &mut init_in_progress.patterns;
+
+            if let Some(((id0, id1), _count)) = find_most_common_duplicate_id_pair(patterns.iter())
+            {
+                let new_id = self.ids_to_tokens.len();
+                self.add_id(TokenId(new_id), Token::Merge(id0, id1));
+                if let Some(ref f) = new_id_callback {
+                    f(new_id);
+                }
+
+                let merge_if = |current_id, next_id| {
+                    if current_id == id0 && next_id == id1 {
+                        Some(TokenId(new_id))
+                    } else {
+                        None
+                    }
+                };
+
+                *patterns = patterns
+                    .iter()
+                    .map(|pattern| merge(pattern.iter().copied(), merge_if))
+                    .collect();
+
+                self.init_in_progress = Some(init_in_progress);
+            }
+        }
     }
 
     pub fn encode(&self, data: &[u8]) -> Vec<TokenId> {

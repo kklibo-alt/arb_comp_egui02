@@ -4,6 +4,7 @@ name: Deploy to project page
 on:
   push:
     branches: [ "master" ]
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -24,7 +25,7 @@ jobs:
     - name: Trunk build
       run: |
         cd egui_hex07
-        trunk build --release --public-url="/arb_comp_egui02"
+        trunk build --release --public-url="/arb_comp_egui02_concurrency_tests"
     - name: Upload artifact
       uses: actions/upload-pages-artifact@v3
       with:

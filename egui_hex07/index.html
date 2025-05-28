@@ -5,6 +5,10 @@
 <!-- Disable zooming: -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 
+<!-- Enable SharedArrayBuffer for WebAssembly threads -->
+<meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin" />
+<meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp" />
+
 <head>
     <title>egui_hex07</title>
 
@@ -16,6 +20,7 @@
     <link data-trunk rel="icon" href="assets/favicon.ico">
 
 
+    <link data-trunk rel="copy-file" href="assets/coi-serviceworker.js" />
     <link data-trunk rel="copy-file" href="assets/sw.js" />
     <link data-trunk rel="copy-file" href="assets/manifest.json" />
     <link data-trunk rel="copy-file" href="assets/icon-1024.png" />
@@ -129,6 +134,8 @@
         </p>
         <div class="lds-dual-ring"></div>
     </div>
+
+    <script src="coi-serviceworker.js"></script>
 
     <!--Register Service Worker. this will cache the wasm / js scripts for offline use (for PWA functionality). -->
     <!-- Force refresh (Ctrl + F5) to load the latest files instead of cached files  -->
