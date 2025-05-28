@@ -179,7 +179,6 @@ mod tests {
         assert_eq!(re_pair.encode(&[0x61, 0x62, 0x63]), vec![TokenId(257)]);
         assert_eq!(re_pair.decode(vec![TokenId(257)]), vec![0x61, 0x62, 0x63]);
 
-        /*
         let re_pair = RePair::new(&[&[1, 2, 3, 2, 3, 4], &[1, 2, 3, 1, 2, 3]]);
         assert_eq!(
             re_pair.encode(&[1, 2, 3, 2, 3, 4]),
@@ -189,6 +188,15 @@ mod tests {
             re_pair.decode(vec![TokenId(257), TokenId(256), TokenId(4)]),
             vec![1, 2, 3, 2, 3, 4]
         );
-        */
+    }
+
+    #[test]
+    #[ignore = "doesn't work yet"]
+    fn test_repeating_blocks() {
+        let re_pair = RePair::new(&[&[1, 2, 0, 0, 0, 1, 2, 0, 0, 0, 1, 2]]);
+        assert_eq!(
+            re_pair.encode(&[1, 2, 0, 0]),
+            vec![TokenId(256), TokenId(257),]
+        );
     }
 }

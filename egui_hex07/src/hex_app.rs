@@ -1,8 +1,12 @@
 use crate::diff::{self, HexCell};
 use arb_comp06::{bpe::Bpe, matcher, test_utils};
-use egui::{Color32, RichText, Ui};
+use egui::{Color32, Context, RichText, Ui};
 use egui_extras::{Column, TableBody, TableBuilder, TableRow};
 use rand::Rng;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    mpsc, Arc, Mutex,
+};
 
 #[derive(Debug, PartialEq)]
 enum WhichFile {
@@ -17,7 +21,7 @@ fn drop_select_text(selected: bool) -> &'static str {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 enum DiffMethod {
     ByIndex,
     BpeGreedy00,
@@ -26,57 +30,169 @@ enum DiffMethod {
 pub struct HexApp {
     source_name0: Option<String>,
     source_name1: Option<String>,
-    pattern0: Option<Vec<u8>>,
-    pattern1: Option<Vec<u8>>,
-    diffs0: Vec<HexCell>,
-    diffs1: Vec<HexCell>,
+    pattern0: Arc<Mutex<Option<Vec<u8>>>>,
+    pattern1: Arc<Mutex<Option<Vec<u8>>>>,
+    diffs0: Arc<Mutex<Vec<HexCell>>>,
+    diffs1: Arc<Mutex<Vec<HexCell>>>,
     file_drop_target: WhichFile,
     diff_method: DiffMethod,
+    update_new_id_rx: Option<mpsc::Receiver<usize>>,
+    egui_context: Context,
+    job_running: Arc<AtomicBool>,
+    cancel_job: Arc<AtomicBool>,
 }
 
 fn random_pattern() -> Vec<u8> {
     let mut rng = rand::thread_rng();
-    (0..1000).map(|_| rng.gen_range(0..=255)).collect()
+    (0..4000).map(|_| rng.gen_range(0..=255)).collect()
 }
 
 impl HexApp {
-    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let mut result = Self {
             source_name0: Some("zeroes0".to_string()),
             source_name1: Some("zeroes1".to_string()),
-            pattern0: Some(vec![0; 1000]),
-            pattern1: Some(vec![0; 1000]),
-            diffs0: vec![],
-            diffs1: vec![],
+            pattern0: Arc::new(Mutex::new(Some(vec![0; 1000]))),
+            pattern1: Arc::new(Mutex::new(Some(vec![0; 1000]))),
+            diffs0: Arc::new(Mutex::new(vec![])),
+            diffs1: Arc::new(Mutex::new(vec![])),
             file_drop_target: WhichFile::File0,
             diff_method: DiffMethod::ByIndex,
+            update_new_id_rx: None,
+            egui_context: cc.egui_ctx.clone(),
+            job_running: Arc::new(AtomicBool::new(false)),
+            cancel_job: Arc::new(AtomicBool::new(false)),
         };
 
         result.update_diffs();
         result
     }
 
+    fn try_set_pattern0(&mut self, pattern: Vec<u8>) -> bool {
+        if self.job_running.load(Ordering::Acquire) {
+            false
+        } else {
+            let mut pattern0 = self.pattern0.lock().unwrap();
+            *pattern0 = Some(pattern);
+            true
+        }
+    }
+    fn try_set_pattern1(&mut self, pattern: Vec<u8>) -> bool {
+        if self.job_running.load(Ordering::Acquire) {
+            false
+        } else {
+            let mut pattern1 = self.pattern1.lock().unwrap();
+            *pattern1 = Some(pattern);
+            true
+        }
+    }
+
     fn update_diffs(&mut self) {
-        let (diffs1, diffs2) =
-            if let (Some(pattern0), Some(pattern1)) = (&self.pattern0, &self.pattern1) {
-                let len = std::cmp::max(pattern0.len(), pattern1.len());
-                match self.diff_method {
-                    DiffMethod::ByIndex => diff::get_diffs(pattern0, pattern1, 0..len),
-                    DiffMethod::BpeGreedy00 => {
-                        let bpe = Bpe::new(&[pattern0, pattern1]);
+        if self.job_running.load(Ordering::Acquire) {
+            return;
+        }
+        self.job_running.store(true, Ordering::Release);
 
-                        let pattern0 = bpe.encode(pattern0);
-                        let pattern1 = bpe.encode(pattern1);
+        let pattern0 = self.pattern0.clone();
+        let pattern1 = self.pattern1.clone();
 
-                        let matches = matcher::greedy00(&pattern0, &pattern1);
-                        test_utils::matches_to_cells(&matches, |x| bpe.decode(x.clone()))
-                    }
+        let diffs0 = self.diffs0.clone();
+        let diffs1 = self.diffs1.clone();
+
+        let diff_method = self.diff_method;
+        let egui_context = self.egui_context.clone();
+
+        let (tx, rx) = mpsc::channel::<usize>();
+        self.update_new_id_rx = Some(rx);
+
+        #[cfg(target_arch = "wasm32")]
+        // Spawn an async task to request egui repaints from the main thread.
+        // (When attempted from a Web Worker thread, the program panics.)
+        let refresh_egui_tx = {
+            use futures::{channel::mpsc, StreamExt as _};
+
+            let (tx, mut rx) = mpsc::unbounded::<()>();
+            let egui_context = self.egui_context.clone();
+
+            wasm_bindgen_futures::spawn_local(async move {
+                while let Some(()) = rx.next().await {
+                    egui_context.request_repaint();
                 }
-            } else {
-                (vec![], vec![])
+                log::info!("loop ENDED");
+                // One more repaint after the last worker thread finishes.
+                egui_context.request_repaint();
+            });
+
+            tx
+        };
+
+        let cancel_job = self.cancel_job.clone();
+        let worker = move |_s: &rayon::Scope<'_>| {
+            let pattern0 = pattern0.lock().unwrap();
+            let pattern1 = pattern1.lock().unwrap();
+
+            let request_repaint = || {
+                #[cfg(target_arch = "wasm32")]
+                refresh_egui_tx.unbounded_send(()).unwrap();
+
+                #[cfg(not(target_arch = "wasm32"))]
+                egui_context.request_repaint();
             };
-        self.diffs0 = diffs1;
-        self.diffs1 = diffs2;
+
+            let (new_diffs0, new_diffs1) =
+                if let (Some(pattern0), Some(pattern1)) = (&*pattern0, &*pattern1) {
+                    let len = std::cmp::max(pattern0.len(), pattern1.len());
+                    match diff_method {
+                        DiffMethod::ByIndex => diff::get_diffs(pattern0, pattern1, 0..len),
+                        DiffMethod::BpeGreedy00 => {
+                            let f = |x| {
+                                tx.send(x).unwrap();
+                                request_repaint();
+                            };
+                            println!("starting new_iterative");
+                            let mut bpe = Bpe::new_iterative(&[pattern0, pattern1]);
+                            println!("finished new_iterative");
+                            while bpe.init_in_progress.is_some() {
+                                bpe.init_step(Some(f));
+
+                                if cancel_job.load(Ordering::Acquire) {
+                                    return;
+                                }
+                            }
+
+                            let pattern0 = bpe.encode(pattern0);
+                            let pattern1 = bpe.encode(pattern1);
+
+                            let matches = matcher::greedy00(&pattern0, &pattern1);
+                            test_utils::matches_to_cells(&matches, |x| bpe.decode(x.clone()))
+                        }
+                    }
+                } else {
+                    (vec![], vec![])
+                };
+            log::info!("started updating diffs");
+            {
+                let mut diffs0 = diffs0.lock().unwrap();
+                *diffs0 = new_diffs0;
+            }
+            {
+                let mut diffs1 = diffs1.lock().unwrap();
+                *diffs1 = new_diffs1;
+            }
+            log::info!("finished updating diffs");
+
+            request_repaint();
+        };
+
+        let job_running = self.job_running.clone();
+        let cancel_job = self.cancel_job.clone();
+        rayon::spawn(move || {
+            rayon::scope(|s| {
+                s.spawn(worker);
+            });
+            job_running.store(false, Ordering::Release);
+            cancel_job.store(false, Ordering::Release);
+        });
     }
 
     fn add_header_row(&mut self, mut header: TableRow<'_, '_>) {
@@ -92,8 +208,7 @@ impl HexApp {
                     let text = drop_select_text(self.file_drop_target == WhichFile::File0);
                     ui.selectable_value(&mut self.file_drop_target, WhichFile::File0, text)
                         .highlight();
-                    if ui.button("randomize").clicked() {
-                        self.pattern0 = Some(random_pattern());
+                    if ui.button("randomize").clicked() && self.try_set_pattern0(random_pattern()) {
                         self.source_name0 = Some("random".to_string());
                         self.update_diffs();
                     }
@@ -108,8 +223,7 @@ impl HexApp {
                     let text = drop_select_text(self.file_drop_target == WhichFile::File1);
                     ui.selectable_value(&mut self.file_drop_target, WhichFile::File1, text)
                         .highlight();
-                    if ui.button("randomize").clicked() {
-                        self.pattern1 = Some(random_pattern());
+                    if ui.button("randomize").clicked() && self.try_set_pattern1(random_pattern()) {
                         self.source_name1 = Some("random".to_string());
                         self.update_diffs();
                     }
@@ -140,10 +254,22 @@ impl HexApp {
             )
         }
 
+        let diffs0 = if let Ok(diffs0) = self.diffs0.try_lock() {
+            diffs0
+        } else {
+            return;
+        };
+
+        let diffs1 = if let Ok(diffs1) = self.diffs1.try_lock() {
+            diffs1
+        } else {
+            return;
+        };
+
         let hex_grid_width = 16;
 
         let row_height = 18.0;
-        let num_rows = 1 + std::cmp::max(self.diffs0.len(), self.diffs1.len()) / hex_grid_width;
+        let num_rows = 1 + std::cmp::max(diffs0.len(), diffs1.len()) / hex_grid_width;
 
         body.rows(row_height, num_rows, |mut row| {
             let row_index = row.index();
@@ -205,47 +331,56 @@ impl HexApp {
             row.col(|ui| {
                 ui.label(RichText::new(format!("{:08X}", row_index * hex_grid_width)).monospace());
             });
-            row.col(|ui| add_hex_row(ui, &self.diffs0));
-            row.col(|ui| add_ascii_row(ui, &self.diffs0));
-            row.col(|ui| add_hex_row(ui, &self.diffs1));
-            row.col(|ui| add_ascii_row(ui, &self.diffs1));
+            row.col(|ui| add_hex_row(ui, &diffs0));
+            row.col(|ui| add_ascii_row(ui, &diffs0));
+            row.col(|ui| add_hex_row(ui, &diffs1));
+            row.col(|ui| add_ascii_row(ui, &diffs1));
         });
     }
 }
 
 impl eframe::App for HexApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let mut new_id = None;
+        if let Some(rx) = &mut self.update_new_id_rx {
+            for x in rx.try_iter() {
+                new_id = Some(x);
+            }
+        }
+
         ctx.input(|i| {
             if let Some(dropped_file) = i.raw.dropped_files.first() {
                 // This should only be Some when running as a native app.
                 if let Some(path) = &dropped_file.path {
-                    match self.file_drop_target {
-                        WhichFile::File0 => {
-                            self.source_name0 = Some(path.to_string_lossy().to_string());
-                            self.pattern0 = std::fs::read(path).ok();
-                            if self.pattern0.is_none() {
-                                log::error!("failed to read file: {:?}", path);
+                    if let Ok(pattern) = std::fs::read(path) {
+                        match self.file_drop_target {
+                            WhichFile::File0 => {
+                                if self.try_set_pattern0(pattern) {
+                                    self.source_name0 = Some(path.to_string_lossy().to_string());
+                                }
+                            }
+                            WhichFile::File1 => {
+                                if self.try_set_pattern1(pattern) {
+                                    self.source_name1 = Some(path.to_string_lossy().to_string());
+                                }
                             }
                         }
-                        WhichFile::File1 => {
-                            self.source_name1 = Some(path.to_string_lossy().to_string());
-                            self.pattern1 = std::fs::read(path).ok();
-                            if self.pattern1.is_none() {
-                                log::error!("failed to read file: {:?}", path);
-                            }
-                        }
+                    } else {
+                        log::error!("failed to read file: {path:?}");
                     }
                 }
                 // This should only be Some when running as a web app.
                 else if let Some(bytes) = &dropped_file.bytes {
                     match self.file_drop_target {
                         WhichFile::File0 => {
-                            self.pattern0 = Some(bytes.to_vec());
-                            self.source_name0 = Some(dropped_file.name.clone());
+                            if self.try_set_pattern0(bytes.to_vec()) {
+                                self.source_name0 = Some(dropped_file.name.clone());
+                            }
                         }
                         WhichFile::File1 => {
-                            self.pattern1 = Some(bytes.to_vec());
-                            self.source_name1 = Some(dropped_file.name.clone());
+                            if self.try_set_pattern1(bytes.to_vec()) {
+                                self.source_name1 = Some(dropped_file.name.clone());
+                            }
                         }
                     }
                 }
@@ -272,6 +407,19 @@ impl eframe::App for HexApp {
                 {
                     self.update_diffs();
                 }
+
+                if ui
+                    .add_enabled(
+                        self.job_running.load(Ordering::Acquire),
+                        egui::Button::new("cancel"),
+                    )
+                    .clicked()
+                {
+                    self.cancel_job.store(true, Ordering::Release);
+                }
+
+                //display the new id
+                ui.label(RichText::new(format!("new id: {new_id:?}")));
             });
 
             TableBuilder::new(ui)
