@@ -208,11 +208,9 @@ impl HexApp {
                     let text = drop_select_text(self.file_drop_target == WhichFile::File0);
                     ui.selectable_value(&mut self.file_drop_target, WhichFile::File0, text)
                         .highlight();
-                    if ui.button("randomize").clicked() {
-                        if self.try_set_pattern0(random_pattern()) {
-                            self.source_name0 = Some("random".to_string());
-                            self.update_diffs();
-                        }
+                    if ui.button("randomize").clicked() && self.try_set_pattern0(random_pattern()) {
+                        self.source_name0 = Some("random".to_string());
+                        self.update_diffs();
                     }
                 });
             });
@@ -225,11 +223,9 @@ impl HexApp {
                     let text = drop_select_text(self.file_drop_target == WhichFile::File1);
                     ui.selectable_value(&mut self.file_drop_target, WhichFile::File1, text)
                         .highlight();
-                    if ui.button("randomize").clicked() {
-                        if self.try_set_pattern1(random_pattern()) {
-                            self.source_name1 = Some("random".to_string());
-                            self.update_diffs();
-                        }
+                    if ui.button("randomize").clicked() && self.try_set_pattern1(random_pattern()) {
+                        self.source_name1 = Some("random".to_string());
+                        self.update_diffs();
                     }
                 });
             });
@@ -356,7 +352,7 @@ impl eframe::App for HexApp {
             if let Some(dropped_file) = i.raw.dropped_files.first() {
                 // This should only be Some when running as a native app.
                 if let Some(path) = &dropped_file.path {
-                    if let Some(pattern) = std::fs::read(path).ok() {
+                    if let Ok(pattern) = std::fs::read(path) {
                         match self.file_drop_target {
                             WhichFile::File0 => {
                                 if self.try_set_pattern0(pattern) {
@@ -370,7 +366,7 @@ impl eframe::App for HexApp {
                             }
                         }
                     } else {
-                        log::error!("failed to read file: {:?}", path);
+                        log::error!("failed to read file: {path:?}");
                     }
                 }
                 // This should only be Some when running as a web app.
