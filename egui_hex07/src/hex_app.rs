@@ -1,5 +1,5 @@
 use crate::diff::{self, HexCell};
-use arb_comp06::{bpe::Bpe, matcher, test_utils};
+use arb_comp06::{bpe::Bpe, matcher, re_pair::RePair, test_utils};
 use egui::{Color32, Context, RichText, Ui};
 use egui_extras::{Column, TableBody, TableBuilder, TableRow};
 use rand::Rng;
@@ -25,6 +25,7 @@ fn drop_select_text(selected: bool) -> &'static str {
 enum DiffMethod {
     ByIndex,
     BpeGreedy00,
+    RePairGreedy00,
 }
 
 pub struct HexApp {
@@ -100,6 +101,7 @@ impl HexApp {
         let diffs1 = self.diffs1.clone();
 
         let diff_method = self.diff_method;
+        #[cfg(not(target_arch = "wasm32"))]
         let egui_context = self.egui_context.clone();
 
         let (tx, rx) = mpsc::channel::<usize>();
@@ -165,6 +167,15 @@ impl HexApp {
 
                             let matches = matcher::greedy00(&pattern0, &pattern1);
                             test_utils::matches_to_cells(&matches, |x| bpe.decode(x.clone()))
+                        }
+                        DiffMethod::RePairGreedy00 => {
+                            let re_pair = RePair::new(&[pattern0, pattern1]);
+
+                            let pattern0 = re_pair.encode(pattern0);
+                            let pattern1 = re_pair.encode(pattern1);
+
+                            let matches = matcher::greedy00(&pattern0, &pattern1);
+                            test_utils::matches_to_cells(&matches, |x| re_pair.decode(x.clone()))
                         }
                     }
                 } else {
@@ -405,6 +416,26 @@ impl eframe::App for HexApp {
                     .selectable_value(&mut self.diff_method, BpeGreedy00, "BPE Greedy 00")
                     .clicked()
                 {
+                    self.update_diffs();
+                }
+
+                if ui
+                    .selectable_value(&mut self.diff_method, RePairGreedy00, "RePair Greedy 00")
+                    .clicked()
+                {
+                    self.update_diffs();
+                }
+
+                if ui.button("test").clicked() {
+                    let pattern0 = "aJAOA1pjSAwCr9CkW3FE7166ch/309iOkW3FRa+1ch/30WIYjbT";
+                    let pattern1 = "aJAOA1pjSAwCr9CkW3kkZMFE7166ch/309iORa+1ch/30WkkZMIYjbT";
+
+                    if self.try_set_pattern0(pattern0.as_bytes().into()) {
+                        self.source_name0 = Some("test pattern0".to_string());
+                    }
+                    if self.try_set_pattern1(pattern1.as_bytes().into()) {
+                        self.source_name1 = Some("test pattern1".to_string());
+                    }
                     self.update_diffs();
                 }
 
