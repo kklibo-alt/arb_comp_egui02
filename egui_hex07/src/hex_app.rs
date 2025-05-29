@@ -434,6 +434,11 @@ impl eframe::App for HexApp {
                         ("random_1k", test_patterns::random_1k),
                         ("random_256", test_patterns::random_256),
                         ("random_minus_block", test_patterns::random_minus_block),
+                        ("zeroes_minus_block", test_patterns::zeroes_minus_block),
+                        (
+                            "random_10k_minus_block",
+                            test_patterns::random_10k_minus_block,
+                        ),
                     ];
 
                     for (name, f) in buttons {
