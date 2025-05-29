@@ -149,6 +149,9 @@ impl RePair {
                 if count >= 2 {
                     let new_id = TokenId(self.ids_to_tokens.len());
                     self.add_id(new_id, Token::Merge(id0, id1));
+                    if let Some(ref f) = new_id_callback {
+                        f(new_id.0);
+                    }
 
                     for (pattern, pair_locations) in patterns
                         .iter_mut()

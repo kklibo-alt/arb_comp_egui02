@@ -169,7 +169,19 @@ impl HexApp {
                             test_utils::matches_to_cells(&matches, |x| bpe.decode(x.clone()))
                         }
                         DiffMethod::RePairGreedy00 => {
-                            let re_pair = RePair::new(&[pattern0, pattern1]);
+                            let f = |x| {
+                                tx.send(x).unwrap();
+                                request_repaint();
+                            };
+                            
+                            let mut re_pair = RePair::new_iterative(&[pattern0, pattern1]);
+                            while re_pair.init_in_progress.is_some() {
+                                re_pair.init_step(Some(f));
+
+                                if cancel_job.load(Ordering::Acquire) {
+                                    return;
+                                }
+                            }
 
                             let pattern0 = re_pair.encode(pattern0);
                             let pattern1 = re_pair.encode(pattern1);
