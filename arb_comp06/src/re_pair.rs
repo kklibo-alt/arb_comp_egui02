@@ -42,6 +42,8 @@ impl RePair {
         None
     }
 
+    /// Note: when this function is called, this pair has already been removed from
+    /// pair locations and counts.
     fn replace_pair(
         id0: TokenId,
         id1: TokenId,
