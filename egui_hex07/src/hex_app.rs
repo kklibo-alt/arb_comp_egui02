@@ -432,6 +432,8 @@ impl eframe::App for HexApp {
                     let buttons: &[(_, PatternFunc)] = &[
                         ("trivial", test_patterns::trivial),
                         ("random_1k", test_patterns::random_1k),
+                        ("random_256", test_patterns::random_256),
+                        ("random_minus_block", test_patterns::random_minus_block),
                     ];
 
                     for (name, f) in buttons {
