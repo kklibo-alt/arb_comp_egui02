@@ -427,29 +427,26 @@ impl eframe::App for HexApp {
                 }
 
                 ui.menu_button("Load Test", |ui| {
-                    if ui.button("trivial").clicked() {
-                        let (pattern0, pattern1) = test_patterns::trivial();
+                    type PatternFunc = fn() -> (Vec<u8>, Vec<u8>);
 
-                        if self.try_set_pattern0(pattern0) {
-                            self.source_name0 = Some("test_patterns::trivial: 0".to_string());
-                        }
-                        if self.try_set_pattern1(pattern1) {
-                            self.source_name1 = Some("test_patterns::trivial: 1".to_string());
-                        }
-                        self.update_diffs();
-                        ui.close_menu();
-                    }
-                    if ui.button("random_1k").clicked() {
-                        let (pattern0, pattern1) = test_patterns::random_1k();
+                    let buttons: &[(_, PatternFunc)] = &[
+                        ("trivial", test_patterns::trivial),
+                        ("random_1k", test_patterns::random_1k),
+                    ];
 
-                        if self.try_set_pattern0(pattern0) {
-                            self.source_name0 = Some("test_patterns::random_1k: 0".to_string());
+                    for (name, f) in buttons {
+                        if ui.button(*name).clicked() {
+                            let (pattern0, pattern1) = f();
+
+                            if self.try_set_pattern0(pattern0) {
+                                self.source_name0 = Some(format!("test pattern 0: {name}"));
+                            }
+                            if self.try_set_pattern1(pattern1) {
+                                self.source_name1 = Some(format!("test pattern 1: {name}"));
+                            }
+                            self.update_diffs();
+                            ui.close_menu();
                         }
-                        if self.try_set_pattern1(pattern1) {
-                            self.source_name1 = Some("test_patterns::random_1k: 1".to_string());
-                        }
-                        self.update_diffs();
-                        ui.close_menu();
                     }
                 });
 
