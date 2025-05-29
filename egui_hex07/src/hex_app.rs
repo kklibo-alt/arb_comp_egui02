@@ -439,6 +439,18 @@ impl eframe::App for HexApp {
                         self.update_diffs();
                         ui.close_menu();
                     }
+                    if ui.button("random_1k").clicked() {
+                        let (pattern0, pattern1) = test_patterns::random_1k();
+
+                        if self.try_set_pattern0(pattern0) {
+                            self.source_name0 = Some("test_patterns::random_1k: 0".to_string());
+                        }
+                        if self.try_set_pattern1(pattern1) {
+                            self.source_name1 = Some("test_patterns::random_1k: 1".to_string());
+                        }
+                        self.update_diffs();
+                        ui.close_menu();
+                    }
                 });
 
                 if ui
