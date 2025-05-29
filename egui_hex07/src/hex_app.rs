@@ -426,18 +426,21 @@ impl eframe::App for HexApp {
                     self.update_diffs();
                 }
 
-                if ui.button("test").clicked() {
-                    let pattern0 = "aJAOA1pjSAwCr9CkW3FE7166ch/309iOkW3FRa+1ch/30WIYjbT";
-                    let pattern1 = "aJAOA1pjSAwCr9CkW3kkZMFE7166ch/309iORa+1ch/30WkkZMIYjbT";
+                ui.menu_button("Load Test", |ui| {
+                    if ui.button("trivial").clicked() {
+                        let pattern0 = "aJAOA1pjSAwCr9CkW3FE7166ch/309iOkW3FRa+1ch/30WIYjbT";
+                        let pattern1 = "aJAOA1pjSAwCr9CkW3kkZMFE7166ch/309iORa+1ch/30WkkZMIYjbT";
 
-                    if self.try_set_pattern0(pattern0.as_bytes().into()) {
-                        self.source_name0 = Some("test pattern0".to_string());
+                        if self.try_set_pattern0(pattern0.as_bytes().into()) {
+                            self.source_name0 = Some("test pattern0".to_string());
+                        }
+                        if self.try_set_pattern1(pattern1.as_bytes().into()) {
+                            self.source_name1 = Some("test pattern1".to_string());
+                        }
+                        self.update_diffs();
+                        ui.close_menu();
                     }
-                    if self.try_set_pattern1(pattern1.as_bytes().into()) {
-                        self.source_name1 = Some("test pattern1".to_string());
-                    }
-                    self.update_diffs();
-                }
+                });
 
                 if ui
                     .add_enabled(
