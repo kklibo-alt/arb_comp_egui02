@@ -7,6 +7,13 @@ use keyed_priority_queue::KeyedPriorityQueue;
 pub struct RePair {
     ids_to_tokens: IndexMap<TokenId, Token>,
     tokens_to_ids: IndexMap<Token, TokenId>,
+    pub init_in_progress: Option<InitInProgress>,
+}
+
+pub struct InitInProgress {
+    patterns: Vec<Vec<TokenId>>,
+    pair_locations_in_patterns: Vec<MappedSets>,
+    pair_counts: KeyedPriorityQueue<(TokenId, TokenId), usize>,
 }
 
 impl RePair {
@@ -89,18 +96,28 @@ impl RePair {
         (added_pair_locations, removed_pair_locations)
     }
 
-    // first attempt: ignore token repetition block overcounting for now
     pub fn new(data: &[&[u8]]) -> Self {
+        let mut re_pair = Self::new_iterative(data);
+
+        while re_pair.init_in_progress.is_some() {
+            re_pair.init_step(None::<fn(usize)>);
+        }
+
+        re_pair
+    }
+
+    pub fn new_iterative(data: &[&[u8]]) -> Self {
         let mut re_pair = Self {
             ids_to_tokens: IndexMap::new(),
             tokens_to_ids: IndexMap::new(),
+            init_in_progress: None,
         };
 
         (0..=u8::MAX).for_each(|x| re_pair.add_id(TokenId(x as usize), Token::Byte(x)));
 
-        let mut patterns: Vec<Vec<TokenId>> = data.iter().map(|x| re_pair.encode(x)).collect();
+        let patterns: Vec<Vec<TokenId>> = data.iter().map(|x| re_pair.encode(x)).collect();
 
-        let mut pair_locations_in_patterns: Vec<MappedSets> = patterns
+        let pair_locations_in_patterns: Vec<MappedSets> = patterns
             .iter()
             .map(|pattern| Self::record_id_pairs(pattern))
             .collect();
@@ -113,31 +130,45 @@ impl RePair {
             pair_locations_in_patterns.iter().flat_map(|x| x.lengths()),
         );
 
-        while let Some(((id0, id1), count)) = pair_counts.pop() {
-            if count < 2 {
-                break;
-            }
-            let new_id = TokenId(re_pair.ids_to_tokens.len());
-            re_pair.add_id(new_id, Token::Merge(id0, id1));
+        re_pair.init_in_progress = Some(InitInProgress {
+            patterns,
+            pair_locations_in_patterns,
+            pair_counts,
+        });
+        re_pair
+    }
 
-            for (pattern, pair_locations) in patterns
-                .iter_mut()
-                .zip(pair_locations_in_patterns.iter_mut())
-            {
-                if let Some(locations) = pair_locations.0.swap_remove(&(id0, id1)) {
-                    let (added_pair_locations, removed_pair_locations) =
-                        Self::replace_pair(id0, id1, locations, pattern, new_id);
+    // first attempt: ignore token repetition block overcounting for now
+    pub fn init_step(&mut self, new_id_callback: Option<impl Fn(usize)>) {
+        if let Some(mut init_in_progress) = self.init_in_progress.take() {
+            let patterns = &mut init_in_progress.patterns;
+            let pair_locations_in_patterns = &mut init_in_progress.pair_locations_in_patterns;
+            let pair_counts = &mut init_in_progress.pair_counts;
 
-                    increase_priorities(&mut pair_counts, added_pair_locations.lengths());
-                    decrease_priorities(&mut pair_counts, removed_pair_locations.lengths());
+            if let Some(((id0, id1), count)) = pair_counts.pop() {
+                if count >= 2 {
+                    let new_id = TokenId(self.ids_to_tokens.len());
+                    self.add_id(new_id, Token::Merge(id0, id1));
 
-                    *pair_locations += added_pair_locations;
-                    *pair_locations -= removed_pair_locations;
+                    for (pattern, pair_locations) in patterns
+                        .iter_mut()
+                        .zip(pair_locations_in_patterns.iter_mut())
+                    {
+                        if let Some(locations) = pair_locations.0.swap_remove(&(id0, id1)) {
+                            let (added_pair_locations, removed_pair_locations) =
+                                Self::replace_pair(id0, id1, locations, pattern, new_id);
+
+                            increase_priorities(pair_counts, added_pair_locations.lengths());
+                            decrease_priorities(pair_counts, removed_pair_locations.lengths());
+
+                            *pair_locations += added_pair_locations;
+                            *pair_locations -= removed_pair_locations;
+                        }
+                    }
+                    self.init_in_progress = Some(init_in_progress);
                 }
             }
         }
-
-        re_pair
     }
 
     pub fn encode(&self, data: &[u8]) -> Vec<TokenId> {
