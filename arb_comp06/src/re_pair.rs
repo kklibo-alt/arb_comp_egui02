@@ -45,14 +45,14 @@ impl RePair {
     fn replace_pair(
         id0: TokenId,
         id1: TokenId,
-        locations: IndexSet<usize>,
+        mut locations: IndexSet<usize>,
         pattern: &mut [TokenId],
         replacement: TokenId,
     ) -> (MappedSets, MappedSets) {
         let mut added_pair_locations = MappedSets::new();
         let mut removed_pair_locations = MappedSets::new();
 
-        for index0 in locations {
+        while let Some(index0) = locations.pop() {
             assert_eq!(Some(&id0), pattern.get(index0));
 
             let (token_id1, index1) = Self::get_next_id(pattern, index0).unwrap();
@@ -62,12 +62,21 @@ impl RePair {
             let next_token = Self::get_next_id(pattern, index1);
 
             if let Some((prev_id, prev_index)) = prev_token {
-                removed_pair_locations.insert((prev_id, id0), prev_index);
+                if (prev_id, id0) == (id0, id1) {
+                    assert!(locations.swap_remove(&prev_index));
+                } else {
+                    removed_pair_locations.insert((prev_id, id0), prev_index);
+                }
                 added_pair_locations.insert((prev_id, replacement), prev_index);
             }
 
             if let Some((next_id, _next_index)) = next_token {
-                removed_pair_locations.insert((id1, next_id), index1);
+                if (id1, next_id) == (id0, id1) {
+                    assert!(locations.swap_remove(&index1));
+                } else {
+                    removed_pair_locations.insert((id1, next_id), index1);
+                }
+
                 added_pair_locations.insert((replacement, next_id), index0);
             }
 
@@ -187,6 +196,15 @@ mod tests {
         assert_eq!(
             re_pair.decode(vec![TokenId(257), TokenId(256), TokenId(4)]),
             vec![1, 2, 3, 2, 3, 4]
+        );
+    }
+
+    #[test]
+    fn test_repeating_zeros() {
+        let re_pair = RePair::new(&[&[0, 0, 0]]);
+        assert_eq!(
+            re_pair.encode(&[0, 0, 0, 0]),
+            vec![TokenId(256), TokenId(256),]
         );
     }
 
