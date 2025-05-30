@@ -260,7 +260,7 @@ impl HexApp {
         });
     }
 
-    fn draw_document_map(&mut self, ui: &mut Ui, table_rect: Rect, visible_rows: usize, total_rows: usize) -> Response {
+    fn draw_document_map(&mut self, ui: &mut Ui, _table_rect: Rect, visible_rows: usize, total_rows: usize) -> Response {
         let map_width = 120.0;
         let map_height = 300.0;
         
@@ -343,7 +343,7 @@ impl HexApp {
         
         // Calculate current view position
         let view_start_row = (self.table_scroll_top / 18.0) as usize; // 18.0 is row height
-        let view_end_row = view_start_row + visible_rows;
+        let _view_end_row = view_start_row + visible_rows;
         
         // Draw viewport overlay
         if actual_total_rows > 0 {
@@ -614,16 +614,51 @@ impl eframe::App for HexApp {
                 ui.label(RichText::new(format!("new id: {new_id:?}")));
             });
 
-            TableBuilder::new(ui)
-                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                .striped(true)
-                .column(Column::auto().resizable(true))
-                .column(Column::auto().resizable(true))
-                .column(Column::auto().resizable(true))
-                .column(Column::auto().resizable(true))
-                .column(Column::remainder())
-                .header(20.0, |header| self.add_header_row(header))
-                .body(|body| self.add_body_contents(body));
+            // Calculate total rows for document map
+            let total_rows = {
+                let diffs0 = if let Ok(diffs0) = self.diffs0.try_lock() { diffs0 } else { return; };
+                let diffs1 = if let Ok(diffs1) = self.diffs1.try_lock() { diffs1 } else { return; };
+                let hex_grid_width = 16;
+                1 + std::cmp::max(diffs0.len(), diffs1.len()) / hex_grid_width
+            };
+
+            ui.horizontal(|ui| {
+                // Table on the left
+                let table_output = TableBuilder::new(ui)
+                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                    .striped(true)
+                    .column(Column::auto().resizable(true))
+                    .column(Column::auto().resizable(true))
+                    .column(Column::auto().resizable(true))
+                    .column(Column::auto().resizable(true))
+                    .column(Column::remainder())
+                    .vertical_scroll_offset(self.table_scroll_top)
+                    .header(20.0, |header| self.add_header_row(header))
+                    .body(|body| {
+                        self.add_body_contents(body);
+                    });
+
+                // Update scroll position if table was scrolled by user
+                if !self.document_map_dragging {
+                    let current_scroll = table_output.state.offset.y;
+                    if current_scroll.is_finite() {
+                        self.table_scroll_top = current_scroll;
+                    }
+                }
+
+                // Calculate visible rows based on available height
+                let row_height = 18.0;
+                let header_height = 20.0;
+                let available_height = ui.available_height() - header_height;
+                let visible_rows = (available_height / row_height).max(1.0) as usize;
+
+                // Document map on the right
+                ui.separator();
+                ui.vertical(|ui| {
+                    ui.label("Document Map");
+                    self.draw_document_map(ui, table_output.inner_rect, visible_rows, total_rows);
+                });
+            });
         });
     }
 }
