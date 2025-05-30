@@ -1,6 +1,6 @@
 use crate::diff::{self, HexCell};
 use arb_comp06::{bpe::Bpe, matcher, re_pair::RePair, test_patterns, test_utils};
-use egui::{Color32, Context, RichText, Ui};
+use egui::{Color32, Context, Response, RichText, Sense, Stroke, StrokeKind, Ui, Vec2};
 use egui_extras::{Column, TableBody, TableBuilder, TableRow};
 use rand::Rng;
 use std::sync::{
@@ -173,7 +173,7 @@ impl HexApp {
                                 tx.send(x).unwrap();
                                 request_repaint();
                             };
-                            
+
                             let mut re_pair = RePair::new_iterative(&[pattern0, pattern1]);
                             while re_pair.init_in_progress.is_some() {
                                 re_pair.init_step(Some(f));
@@ -494,5 +494,33 @@ impl eframe::App for HexApp {
                 .header(20.0, |header| self.add_header_row(header))
                 .body(|body| self.add_body_contents(body));
         });
+
+        egui::SidePanel::right("document_map_panel")
+            .default_width(140.0)
+            .min_width(140.0)
+            .max_width(200.0)
+            .show(ctx, |ui| {
+                draw_document_map(ui);
+            });
     }
+}
+
+fn draw_document_map(ui: &mut Ui) -> Response {
+    let map_width = ui.clip_rect().width();
+    let map_height = ui.clip_rect().height();
+
+    let (response, painter) =
+        ui.allocate_painter(Vec2::new(map_width, map_height), Sense::click_and_drag());
+
+    painter.debug_rect(ui.clip_rect(), Color32::RED, "test123");
+
+    painter.rect_stroke(
+        ui.clip_rect(),
+        10.0,
+        Stroke::new(1.0, Color32::ORANGE),
+        StrokeKind::Inside,
+    );
+
+    let map_rect = response.rect;
+    response
 }
