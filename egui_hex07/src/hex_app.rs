@@ -44,6 +44,7 @@ pub struct HexApp {
     cancel_job: Arc<AtomicBool>,
     table_scroll_top: f32,
     document_map_dragging: bool,
+    show_document_map: bool,
 }
 
 fn random_pattern() -> Vec<u8> {
@@ -68,6 +69,7 @@ impl HexApp {
             cancel_job: Arc::new(AtomicBool::new(false)),
             table_scroll_top: 0.0,
             document_map_dragging: false,
+            show_document_map: true,
         };
 
         result.update_diffs();
@@ -610,55 +612,64 @@ impl eframe::App for HexApp {
                     self.cancel_job.store(true, Ordering::Release);
                 }
 
+                ui.separator();
+                ui.checkbox(&mut self.show_document_map, "Document Map");
+
                 //display the new id
                 ui.label(RichText::new(format!("new id: {new_id:?}")));
             });
 
-            // Calculate total rows for document map
-            let total_rows = {
-                let diffs0 = if let Ok(diffs0) = self.diffs0.try_lock() { diffs0 } else { return; };
-                let diffs1 = if let Ok(diffs1) = self.diffs1.try_lock() { diffs1 } else { return; };
-                let hex_grid_width = 16;
-                1 + std::cmp::max(diffs0.len(), diffs1.len()) / hex_grid_width
-            };
-
-            ui.horizontal(|ui| {
-                // Table on the left
-                let table_output = TableBuilder::new(ui)
-                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                    .striped(true)
-                    .column(Column::auto().resizable(true))
-                    .column(Column::auto().resizable(true))
-                    .column(Column::auto().resizable(true))
-                    .column(Column::auto().resizable(true))
-                    .column(Column::remainder())
-                    .vertical_scroll_offset(self.table_scroll_top)
-                    .header(20.0, |header| self.add_header_row(header))
-                    .body(|body| {
-                        self.add_body_contents(body);
-                    });
-
-                // Update scroll position if table was scrolled by user
-                if !self.document_map_dragging {
-                    let current_scroll = table_output.state.offset.y;
-                    if current_scroll.is_finite() {
-                        self.table_scroll_top = current_scroll;
-                    }
-                }
-
-                // Calculate visible rows based on available height
-                let row_height = 18.0;
-                let header_height = 20.0;
-                let available_height = ui.available_height() - header_height;
-                let visible_rows = (available_height / row_height).max(1.0) as usize;
-
-                // Document map on the right
-                ui.separator();
-                ui.vertical(|ui| {
-                    ui.label("Document Map");
-                    self.draw_document_map(ui, table_output.inner_rect, visible_rows, total_rows);
+            // Main table
+            let table_output = TableBuilder::new(ui)
+                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                .striped(true)
+                .column(Column::auto().resizable(true))
+                .column(Column::auto().resizable(true))
+                .column(Column::auto().resizable(true))
+                .column(Column::auto().resizable(true))
+                .column(Column::remainder())
+                .vertical_scroll_offset(self.table_scroll_top)
+                .header(20.0, |header| self.add_header_row(header))
+                .body(|body| {
+                    self.add_body_contents(body);
                 });
-            });
+
+            // Update scroll position if table was scrolled by user
+            if !self.document_map_dragging {
+                let current_scroll = table_output.state.offset.y;
+                if current_scroll.is_finite() {
+                    self.table_scroll_top = current_scroll;
+                }
+            }
         });
+
+        // Document map in a side panel
+        if self.show_document_map {
+            egui::SidePanel::right("document_map_panel")
+                .default_width(140.0)
+                .min_width(140.0)
+                .max_width(200.0)
+                .show(ctx, |ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.heading("Document Map");
+                    });
+                    
+                    // Calculate visible rows based on available height
+                    let row_height = 18.0;
+                    let header_height = 20.0;
+                    let available_height = ui.available_height() - header_height;
+                    let visible_rows = (available_height / row_height).max(1.0) as usize;
+
+                    // Calculate total rows for this panel
+                    let total_rows = {
+                        let diffs0 = if let Ok(diffs0) = self.diffs0.try_lock() { diffs0 } else { return; };
+                        let diffs1 = if let Ok(diffs1) = self.diffs1.try_lock() { diffs1 } else { return; };
+                        let hex_grid_width = 16;
+                        1 + std::cmp::max(diffs0.len(), diffs1.len()) / hex_grid_width
+                    };
+
+                    self.draw_document_map(ui, egui::Rect::NOTHING, visible_rows, total_rows);
+                });
+        }
     }
 }
