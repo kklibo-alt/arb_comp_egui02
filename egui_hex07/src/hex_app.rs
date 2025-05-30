@@ -1,5 +1,5 @@
 use crate::diff::{self, HexCell};
-use arb_comp06::{bpe::Bpe, matcher, test_utils};
+use arb_comp06::{bpe::Bpe, matcher, re_pair::RePair, test_patterns, test_utils};
 use egui::{Color32, Context, RichText, Ui};
 use egui_extras::{Column, TableBody, TableBuilder, TableRow};
 use rand::Rng;
@@ -25,6 +25,7 @@ fn drop_select_text(selected: bool) -> &'static str {
 enum DiffMethod {
     ByIndex,
     BpeGreedy00,
+    RePairGreedy00,
 }
 
 pub struct HexApp {
@@ -100,6 +101,7 @@ impl HexApp {
         let diffs1 = self.diffs1.clone();
 
         let diff_method = self.diff_method;
+        #[cfg(not(target_arch = "wasm32"))]
         let egui_context = self.egui_context.clone();
 
         let (tx, rx) = mpsc::channel::<usize>();
@@ -165,6 +167,27 @@ impl HexApp {
 
                             let matches = matcher::greedy00(&pattern0, &pattern1);
                             test_utils::matches_to_cells(&matches, |x| bpe.decode(x.clone()))
+                        }
+                        DiffMethod::RePairGreedy00 => {
+                            let f = |x| {
+                                tx.send(x).unwrap();
+                                request_repaint();
+                            };
+                            
+                            let mut re_pair = RePair::new_iterative(&[pattern0, pattern1]);
+                            while re_pair.init_in_progress.is_some() {
+                                re_pair.init_step(Some(f));
+
+                                if cancel_job.load(Ordering::Acquire) {
+                                    return;
+                                }
+                            }
+
+                            let pattern0 = re_pair.encode(pattern0);
+                            let pattern1 = re_pair.encode(pattern1);
+
+                            let matches = matcher::greedy00(&pattern0, &pattern1);
+                            test_utils::matches_to_cells(&matches, |x| re_pair.decode(x.clone()))
                         }
                     }
                 } else {
@@ -407,6 +430,44 @@ impl eframe::App for HexApp {
                 {
                     self.update_diffs();
                 }
+
+                if ui
+                    .selectable_value(&mut self.diff_method, RePairGreedy00, "RePair Greedy 00")
+                    .clicked()
+                {
+                    self.update_diffs();
+                }
+
+                ui.menu_button("Load Test", |ui| {
+                    type PatternFunc = fn() -> (Vec<u8>, Vec<u8>);
+
+                    let buttons: &[(_, PatternFunc)] = &[
+                        ("trivial", test_patterns::trivial),
+                        ("random_1k", test_patterns::random_1k),
+                        ("random_256", test_patterns::random_256),
+                        ("random_minus_block", test_patterns::random_minus_block),
+                        ("zeroes_minus_block", test_patterns::zeroes_minus_block),
+                        (
+                            "random_10k_minus_block",
+                            test_patterns::random_10k_minus_block,
+                        ),
+                    ];
+
+                    for (name, f) in buttons {
+                        if ui.button(*name).clicked() {
+                            let (pattern0, pattern1) = f();
+
+                            if self.try_set_pattern0(pattern0) {
+                                self.source_name0 = Some(format!("test pattern 0: {name}"));
+                            }
+                            if self.try_set_pattern1(pattern1) {
+                                self.source_name1 = Some(format!("test pattern 1: {name}"));
+                            }
+                            self.update_diffs();
+                            ui.close_menu();
+                        }
+                    }
+                });
 
                 if ui
                     .add_enabled(

@@ -187,6 +187,7 @@ dependencies = [
  "indexmap",
  "keyed_priority_queue",
  "rand",
+ "rand_chacha",
  "serde",
  "serde_json",
 ]

@@ -5,6 +5,7 @@ mod tests {
 
     use crate::bpe::Bpe;
     use crate::matcher;
+    use crate::re_pair::RePair;
     use crate::recode::{condense, expand, range};
     use crate::test_utils::{self, print_tokens};
     use crate::token::{Token, TokenId};
@@ -65,6 +66,33 @@ mod tests {
         //redundant output
         println!("print_ui_02 test");
         let (cells0, cells1) = test_utils::matches_to_cells(&matches, |x| bpe.decode(x.clone()));
+        test_utils::print_ui_02(&cells0, &cells1);
+    }
+
+    #[test]
+    fn technique03() {
+        // Technique 3:
+        // 1. train a RePair model on both patterns
+        // 2. encode both patterns
+        // 3. use greedy00 matcher to get matched token lists
+        // 4. print the result in columns with aligned matched token blocks
+
+        let file1 = "aJAOA1pjSAwCr9CkW3FE7166ch/309iOkW3FRa+1ch/30WIYjbT";
+        let file2 = "aJAOA1pjSAwCr9CkW3kkZMFE7166ch/309iORa+1ch/30WkkZMIYjbT";
+
+        let re_pair = RePair::new(&[file1.as_bytes(), file2.as_bytes()]);
+
+        let pattern1 = re_pair.encode(file1.as_bytes());
+        let pattern2 = re_pair.encode(file2.as_bytes());
+
+        let matches = matcher::greedy00(&pattern1, &pattern2);
+
+        test_utils::print_ui_01(&matches, |x| re_pair.decode(x.clone()), true);
+
+        //redundant output
+        println!("print_ui_02 test");
+        let (cells0, cells1) =
+            test_utils::matches_to_cells(&matches, |x| re_pair.decode(x.clone()));
         test_utils::print_ui_02(&cells0, &cells1);
     }
 }

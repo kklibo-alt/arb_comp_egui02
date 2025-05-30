@@ -5,6 +5,7 @@ mod pairs;
 pub mod re_pair;
 pub mod recode;
 mod techniques;
+pub mod test_patterns;
 pub mod test_utils;
 mod token;
 mod utils;
