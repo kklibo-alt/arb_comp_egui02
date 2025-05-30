@@ -1,7 +1,8 @@
 use crate::diff::{self, HexCell};
 use arb_comp06::{bpe::Bpe, matcher, re_pair::RePair, test_patterns, test_utils};
-use egui::{Color32, Context, RichText, Ui};
+use egui::{Color32, Context, RichText, Ui, Vec2, Pos2, Rect, Stroke, Sense, Response};
 use egui_extras::{Column, TableBody, TableBuilder, TableRow};
+use eframe::epaint::StrokeKind;
 use rand::Rng;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -41,6 +42,8 @@ pub struct HexApp {
     egui_context: Context,
     job_running: Arc<AtomicBool>,
     cancel_job: Arc<AtomicBool>,
+    table_scroll_top: f32,
+    document_map_dragging: bool,
 }
 
 fn random_pattern() -> Vec<u8> {
@@ -63,6 +66,8 @@ impl HexApp {
             egui_context: cc.egui_ctx.clone(),
             job_running: Arc::new(AtomicBool::new(false)),
             cancel_job: Arc::new(AtomicBool::new(false)),
+            table_scroll_top: 0.0,
+            document_map_dragging: false,
         };
 
         result.update_diffs();
@@ -253,6 +258,132 @@ impl HexApp {
                 });
             });
         });
+    }
+
+    fn draw_document_map(&mut self, ui: &mut Ui, table_rect: Rect, visible_rows: usize, total_rows: usize) -> Response {
+        let map_width = 120.0;
+        let map_height = 300.0;
+        
+        let (response, painter) = ui.allocate_painter(Vec2::new(map_width, map_height), Sense::click_and_drag());
+        let map_rect = response.rect;
+        
+        // Draw background
+        painter.rect_filled(map_rect, 0.0, Color32::from_gray(40));
+        painter.rect_stroke(map_rect, 0.0, Stroke::new(1.0, Color32::from_gray(100)), StrokeKind::Outside);
+        
+        if total_rows == 0 {
+            return response;
+        }
+        
+        // Get diffs data
+        let diffs0 = if let Ok(diffs0) = self.diffs0.try_lock() { diffs0 } else { return response; };
+        let diffs1 = if let Ok(diffs1) = self.diffs1.try_lock() { diffs1 } else { return response; };
+        
+        let hex_grid_width = 16;
+        let max_len = std::cmp::max(diffs0.len(), diffs1.len());
+        let actual_total_rows = (max_len + hex_grid_width - 1) / hex_grid_width;
+        
+        if actual_total_rows == 0 {
+            return response;
+        }
+        
+        // Calculate scale factors
+        let pixels_per_row = map_height / actual_total_rows as f32;
+        let file_width = map_width / 2.0;
+        
+        // Draw miniature representation of files
+        for row in 0..actual_total_rows {
+            let y = map_rect.top() + row as f32 * pixels_per_row;
+            let row_height = pixels_per_row.max(1.0);
+            
+            // Draw file 0 (left side)
+            let mut has_diff0 = false;
+            for col in 0..hex_grid_width {
+                let index = row * hex_grid_width + col;
+                if let Some(cell) = diffs0.get(index) {
+                    if matches!(cell, HexCell::Diff { .. }) {
+                        has_diff0 = true;
+                        break;
+                    }
+                }
+            }
+            
+            let color0 = if has_diff0 { Color32::from_rgb(255, 100, 100) } else { Color32::from_gray(80) };
+            painter.rect_filled(
+                Rect::from_min_size(
+                    Pos2::new(map_rect.left(), y),
+                    Vec2::new(file_width - 1.0, row_height)
+                ),
+                0.0,
+                color0
+            );
+            
+            // Draw file 1 (right side)
+            let mut has_diff1 = false;
+            for col in 0..hex_grid_width {
+                let index = row * hex_grid_width + col;
+                if let Some(cell) = diffs1.get(index) {
+                    if matches!(cell, HexCell::Diff { .. }) {
+                        has_diff1 = true;
+                        break;
+                    }
+                }
+            }
+            
+            let color1 = if has_diff1 { Color32::from_rgb(255, 100, 100) } else { Color32::from_gray(80) };
+            painter.rect_filled(
+                Rect::from_min_size(
+                    Pos2::new(map_rect.left() + file_width + 1.0, y),
+                    Vec2::new(file_width - 1.0, row_height)
+                ),
+                0.0,
+                color1
+            );
+        }
+        
+        // Calculate current view position
+        let view_start_row = (self.table_scroll_top / 18.0) as usize; // 18.0 is row height
+        let view_end_row = view_start_row + visible_rows;
+        
+        // Draw viewport overlay
+        if actual_total_rows > 0 {
+            let viewport_start_y = map_rect.top() + (view_start_row as f32 * pixels_per_row);
+            let viewport_height = (visible_rows as f32 * pixels_per_row).min(map_height - (viewport_start_y - map_rect.top()));
+            
+            let viewport_rect = Rect::from_min_size(
+                Pos2::new(map_rect.left(), viewport_start_y),
+                Vec2::new(map_width, viewport_height)
+            );
+            
+            painter.rect_stroke(viewport_rect, 0.0, Stroke::new(2.0, Color32::from_rgb(100, 150, 255)), StrokeKind::Outside);
+            painter.rect_filled(viewport_rect, 0.0, Color32::from_rgba_unmultiplied(100, 150, 255, 30));
+        }
+        
+        // Handle interaction
+        if response.clicked() {
+            if let Some(click_pos) = response.interact_pointer_pos() {
+                let relative_y = click_pos.y - map_rect.top();
+                let clicked_row = (relative_y / pixels_per_row) as usize;
+                
+                // Update scroll position to center the clicked row
+                self.table_scroll_top = (clicked_row as f32 * 18.0) - (visible_rows as f32 * 18.0 * 0.5);
+                self.table_scroll_top = self.table_scroll_top.max(0.0);
+            }
+        }
+        
+        if response.dragged() {
+            self.document_map_dragging = true;
+            let drag_delta = response.drag_delta();
+            let row_delta = drag_delta.y / pixels_per_row;
+            self.table_scroll_top += row_delta * 18.0;
+            self.table_scroll_top = self.table_scroll_top.max(0.0);
+        }
+        
+        if response.drag_stopped() {
+            self.document_map_dragging = false;
+        }
+        
+        response
     }
 
     fn add_body_contents(&self, body: TableBody<'_>) {
