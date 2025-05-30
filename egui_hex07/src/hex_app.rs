@@ -1,6 +1,8 @@
 use crate::diff::{self, HexCell};
 use arb_comp06::{bpe::Bpe, matcher, re_pair::RePair, test_patterns, test_utils};
-use egui::{Color32, Context, Frame, Response, RichText, Sense, Stroke, StrokeKind, Ui, Vec2};
+use egui::{
+    Color32, ColorImage, Context, Frame, Response, RichText, Sense, Stroke, StrokeKind, Ui, Vec2,
+};
 use egui_extras::{Column, TableBody, TableBuilder, TableRow};
 use rand::Rng;
 use std::sync::{
@@ -519,6 +521,18 @@ fn draw_document_map(ui: &mut Ui) -> Response {
         Stroke::new(1.0, Color32::ORANGE),
         StrokeKind::Inside,
     );
+
+
+    let color_image = ColorImage::new(
+        [draw_rect.width() as usize, draw_rect.height() as usize],
+        //Color32::TRANSPARENT,
+        Color32::BLUE,
+    );
+    let texture = ui.ctx().load_texture("document_map", color_image, Default::default());
+ 
+    egui::Image::new (&texture).paint_at(ui, draw_rect);
+
+    //ui.image(&texture);
 
     response
 }
