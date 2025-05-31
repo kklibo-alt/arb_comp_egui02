@@ -5,9 +5,12 @@ use egui::{
 };
 use egui_extras::{Column, TableBody, TableBuilder, TableRow};
 use rand::Rng;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    mpsc, Arc, Mutex,
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Arc, Mutex,
+    },
+    u8,
 };
 
 #[derive(Debug, PartialEq)]
@@ -522,15 +525,27 @@ fn draw_document_map(ui: &mut Ui) -> Response {
         StrokeKind::Inside,
     );
 
-
-    let color_image = ColorImage::new(
-        [draw_rect.width() as usize, draw_rect.height() as usize],
-        //Color32::TRANSPARENT,
-        Color32::BLUE,
+    let mut color_image = ColorImage::new(
+        //[draw_rect.width() as usize, draw_rect.height() as usize],
+        [12, 25],
+        Color32::TRANSPARENT,
+        //Color32::BLUE,
     );
-    let texture = ui.ctx().load_texture("document_map", color_image, Default::default());
- 
-    egui::Image::new (&texture).paint_at(ui, draw_rect);
+
+    for (i, p) in color_image.pixels.iter_mut().enumerate() {
+        *p = Color32::from_rgba_premultiplied(
+            (i % 256) as u8,
+            255 * (i % 2) as u8,
+            16 * (i % 16) as u8,
+            255,
+        );
+    }
+
+    let texture = ui
+        .ctx()
+        .load_texture("document_map", color_image, Default::default());
+
+    egui::Image::new(&texture).paint_at(ui, draw_rect);
 
     //ui.image(&texture);
 
