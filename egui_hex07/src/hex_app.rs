@@ -1,16 +1,14 @@
 use crate::diff::{self, HexCell};
 use arb_comp06::{bpe::Bpe, matcher, re_pair::RePair, test_patterns, test_utils};
 use egui::{
-    Color32, ColorImage, Context, Frame, Response, RichText, Sense, Stroke, StrokeKind, Ui, Vec2,
+    Color32, ColorImage, Context, Frame, Response, RichText, Sense, Stroke, StrokeKind,
+    TextureHandle, TextureOptions, Ui, Vec2,
 };
 use egui_extras::{Column, TableBody, TableBuilder, TableRow};
 use rand::Rng;
-use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        mpsc, Arc, Mutex,
-    },
-    u8,
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    mpsc, Arc, Mutex,
 };
 
 #[derive(Debug, PartialEq)]
@@ -40,6 +38,7 @@ pub struct HexApp {
     pattern1: Arc<Mutex<Option<Vec<u8>>>>,
     diffs0: Arc<Mutex<Vec<HexCell>>>,
     diffs1: Arc<Mutex<Vec<HexCell>>>,
+    diffs_texture0: Arc<Mutex<TextureHandle>>,
     file_drop_target: WhichFile,
     diff_method: DiffMethod,
     update_new_id_rx: Option<mpsc::Receiver<usize>>,
@@ -55,6 +54,10 @@ fn random_pattern() -> Vec<u8> {
 
 impl HexApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        let texture_handle0 =
+            cc.egui_ctx
+                .load_texture("document_map0", ColorImage::default(), Default::default());
+
         let mut result = Self {
             source_name0: Some("zeroes0".to_string()),
             source_name1: Some("zeroes1".to_string()),
@@ -62,6 +65,7 @@ impl HexApp {
             pattern1: Arc::new(Mutex::new(Some(vec![0; 1000]))),
             diffs0: Arc::new(Mutex::new(vec![])),
             diffs1: Arc::new(Mutex::new(vec![])),
+            diffs_texture0: Arc::new(Mutex::new(texture_handle0)),
             file_drop_target: WhichFile::File0,
             diff_method: DiffMethod::ByIndex,
             update_new_id_rx: None,
@@ -104,6 +108,8 @@ impl HexApp {
 
         let diffs0 = self.diffs0.clone();
         let diffs1 = self.diffs1.clone();
+
+        let diffs_texture0 = self.diffs_texture0.clone();
 
         let diff_method = self.diff_method;
         #[cfg(not(target_arch = "wasm32"))]
@@ -198,6 +204,29 @@ impl HexApp {
                 } else {
                     (vec![], vec![])
                 };
+
+            {
+                let mut diffs_texture0 = diffs_texture0.lock().unwrap().clone();
+
+                let mut color_image = ColorImage::new(
+                    //[draw_rect.width() as usize, draw_rect.height() as usize],
+                    [12, 25],
+                    Color32::TRANSPARENT,
+                    //Color32::BLUE,
+                );
+
+                for (i, p) in color_image.pixels.iter_mut().enumerate() {
+                    *p = Color32::from_rgba_premultiplied(
+                        (i % 256) as u8,
+                        255 * (i % 2) as u8,
+                        16 * (i % 16) as u8,
+                        255,
+                    );
+                }
+
+                diffs_texture0.set(color_image, TextureOptions::default());
+            }
+
             log::info!("started updating diffs");
             {
                 let mut diffs0 = diffs0.lock().unwrap();
@@ -422,7 +451,7 @@ impl eframe::App for HexApp {
             .max_width(200.0)
             //.frame(Frame::NONE)
             .show(ctx, |ui| {
-                draw_document_map(ui);
+                draw_document_map(ui, self.diffs_texture0.lock().unwrap().clone());
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -511,7 +540,7 @@ impl eframe::App for HexApp {
     }
 }
 
-fn draw_document_map(ui: &mut Ui) -> Response {
+fn draw_document_map(ui: &mut Ui, texture_h: TextureHandle) -> Response {
     let draw_rect = ui.max_rect();
 
     let (response, painter) = ui.allocate_painter(draw_rect.size(), Sense::click_and_drag());
@@ -545,7 +574,7 @@ fn draw_document_map(ui: &mut Ui) -> Response {
         .ctx()
         .load_texture("document_map", color_image, Default::default());
 
-    egui::Image::new(&texture).paint_at(ui, draw_rect);
+    egui::Image::new(&texture_h).paint_at(ui, draw_rect);
 
     //ui.image(&texture);
 
