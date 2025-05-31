@@ -1,8 +1,8 @@
 use crate::diff::{self, HexCell};
 use arb_comp06::{bpe::Bpe, matcher, re_pair::RePair, test_patterns, test_utils};
 use egui::{
-    Color32, ColorImage, Context, Frame, Response, RichText, Sense, Stroke, StrokeKind,
-    TextureHandle, TextureOptions, Ui, Vec2,
+    Color32, ColorImage, Context, Response, RichText, Sense, Stroke, StrokeKind, TextureHandle,
+    TextureOptions, Ui,
 };
 use egui_extras::{Column, TableBody, TableBuilder, TableRow};
 use rand::Rng;
@@ -38,7 +38,7 @@ pub struct HexApp {
     pattern1: Arc<Mutex<Option<Vec<u8>>>>,
     diffs0: Arc<Mutex<Vec<HexCell>>>,
     diffs1: Arc<Mutex<Vec<HexCell>>>,
-    diffs_texture0: Arc<Mutex<TextureHandle>>,
+    diffs_texture0: TextureHandle,
     file_drop_target: WhichFile,
     diff_method: DiffMethod,
     update_new_id_rx: Option<mpsc::Receiver<usize>>,
@@ -65,7 +65,7 @@ impl HexApp {
             pattern1: Arc::new(Mutex::new(Some(vec![0; 1000]))),
             diffs0: Arc::new(Mutex::new(vec![])),
             diffs1: Arc::new(Mutex::new(vec![])),
-            diffs_texture0: Arc::new(Mutex::new(texture_handle0)),
+            diffs_texture0: texture_handle0,
             file_drop_target: WhichFile::File0,
             diff_method: DiffMethod::ByIndex,
             update_new_id_rx: None,
@@ -109,7 +109,7 @@ impl HexApp {
         let diffs0 = self.diffs0.clone();
         let diffs1 = self.diffs1.clone();
 
-        let diffs_texture0 = self.diffs_texture0.clone();
+        let mut diffs_texture0 = self.diffs_texture0.clone();
 
         let diff_method = self.diff_method;
         #[cfg(not(target_arch = "wasm32"))]
@@ -205,27 +205,33 @@ impl HexApp {
                     (vec![], vec![])
                 };
 
-            {
-                let mut diffs_texture0 = diffs_texture0.lock().unwrap().clone();
+            let columns = 16;
+            let rows = new_diffs0.len().div_ceil(columns);
 
-                let mut color_image = ColorImage::new(
-                    //[draw_rect.width() as usize, draw_rect.height() as usize],
-                    [12, 25],
-                    Color32::TRANSPARENT,
-                    //Color32::BLUE,
-                );
+            let mut color_image = ColorImage::new([columns, rows], Color32::TRANSPARENT);
 
-                for (i, p) in color_image.pixels.iter_mut().enumerate() {
-                    *p = Color32::from_rgba_premultiplied(
-                        (i % 256) as u8,
-                        255 * (i % 2) as u8,
-                        16 * (i % 16) as u8,
-                        255,
-                    );
+            for (&h, p) in new_diffs0.iter().zip(color_image.pixels.iter_mut()) {
+                match h {
+                    HexCell::Same {
+                        value,
+                        source_id: _,
+                    } => {
+                        *p = Color32::from_rgba_premultiplied(0, 0, 16 * (value % 16), 128);
+                    }
+                    HexCell::Diff {
+                        value,
+                        source_id: _,
+                    } => {
+                        *p = Color32::from_rgba_premultiplied(16 * (value % 16), 0, 0, 128);
+                    }
+                    HexCell::Blank => {
+                        *p = Color32::from_rgba_premultiplied(0, 0, 0, 128);
+                    }
                 }
-
-                diffs_texture0.set(color_image, TextureOptions::default());
             }
+
+            // Can this block the main thread?
+            diffs_texture0.set(color_image, TextureOptions::default());
 
             log::info!("started updating diffs");
             {
@@ -451,7 +457,7 @@ impl eframe::App for HexApp {
             .max_width(200.0)
             //.frame(Frame::NONE)
             .show(ctx, |ui| {
-                draw_document_map(ui, self.diffs_texture0.lock().unwrap().clone());
+                draw_document_map(ui, self.diffs_texture0.clone());
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -545,7 +551,7 @@ fn draw_document_map(ui: &mut Ui, texture_h: TextureHandle) -> Response {
 
     let (response, painter) = ui.allocate_painter(draw_rect.size(), Sense::click_and_drag());
 
-    painter.debug_rect(draw_rect, Color32::RED, "test123");
+    painter.debug_rect(draw_rect, Color32::RED, "document_map");
 
     painter.rect_stroke(
         draw_rect,
@@ -554,29 +560,7 @@ fn draw_document_map(ui: &mut Ui, texture_h: TextureHandle) -> Response {
         StrokeKind::Inside,
     );
 
-    let mut color_image = ColorImage::new(
-        //[draw_rect.width() as usize, draw_rect.height() as usize],
-        [12, 25],
-        Color32::TRANSPARENT,
-        //Color32::BLUE,
-    );
-
-    for (i, p) in color_image.pixels.iter_mut().enumerate() {
-        *p = Color32::from_rgba_premultiplied(
-            (i % 256) as u8,
-            255 * (i % 2) as u8,
-            16 * (i % 16) as u8,
-            255,
-        );
-    }
-
-    let texture = ui
-        .ctx()
-        .load_texture("document_map", color_image, Default::default());
-
     egui::Image::new(&texture_h).paint_at(ui, draw_rect);
-
-    //ui.image(&texture);
 
     response
 }
