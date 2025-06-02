@@ -212,17 +212,15 @@ impl HexApp {
 
             for (&h, p) in new_diffs0.iter().zip(color_image.pixels.iter_mut()) {
                 match h {
-                    HexCell::Same {
-                        value,
-                        source_id: _,
-                    } => {
-                        *p = Color32::from_rgba_premultiplied(0, 0, 16 * (value % 16), 128);
+                    HexCell::Same { value, source_id } => {
+                        //*p = Color32::from_rgba_premultiplied(0, 0, 16 * (value % 16), 128);
+                        *p = Self::color(source_id);
                     }
-                    HexCell::Diff {
-                        value,
-                        source_id: _,
-                    } => {
-                        *p = Color32::from_rgba_premultiplied(16 * (value % 16), 0, 0, 128);
+                    HexCell::Diff { value, source_id } => {
+                        //*p = Color32::from_rgba_premultiplied(16 * (value % 16), 0, 0, 128);
+                        let color = Self::color(source_id);
+                        let contrast = Self::contrast(color);
+                        *p = contrast;
                     }
                     HexCell::Blank => {
                         *p = Color32::from_rgba_premultiplied(0, 0, 0, 128);
@@ -231,7 +229,13 @@ impl HexApp {
             }
 
             // Can this block the main thread?
-            diffs_texture0.set(color_image, TextureOptions::default());
+            diffs_texture0.set(
+                color_image,
+                TextureOptions {
+                    magnification: egui::TextureFilter::Nearest,
+                    ..Default::default()
+                },
+            );
 
             log::info!("started updating diffs");
             {
@@ -295,28 +299,28 @@ impl HexApp {
         });
     }
 
-    fn add_body_contents(&self, body: TableBody<'_>) {
-        fn color(c: usize) -> Color32 {
-            let hi: u8 = 255;
-            let lo: u8 = 128;
-            match c % 6 {
-                0 => Color32::from_rgb(hi, lo, lo),
-                1 => Color32::from_rgb(hi, hi, lo),
-                2 => Color32::from_rgb(lo, hi, lo),
-                3 => Color32::from_rgb(lo, hi, hi),
-                4 => Color32::from_rgb(lo, lo, hi),
-                5 => Color32::from_rgb(hi, lo, hi),
-                _ => unreachable!(),
-            }
+    fn color(c: usize) -> Color32 {
+        let hi: u8 = 255;
+        let lo: u8 = 128;
+        match c % 6 {
+            0 => Color32::from_rgb(hi, lo, lo),
+            1 => Color32::from_rgb(hi, hi, lo),
+            2 => Color32::from_rgb(lo, hi, lo),
+            3 => Color32::from_rgb(lo, hi, hi),
+            4 => Color32::from_rgb(lo, lo, hi),
+            5 => Color32::from_rgb(hi, lo, hi),
+            _ => unreachable!(),
         }
-        fn contrast(color: Color32) -> Color32 {
-            Color32::from_rgb(
-                u8::wrapping_add(color.r(), 128),
-                u8::wrapping_add(color.g(), 128),
-                u8::wrapping_add(color.b(), 128),
-            )
-        }
+    }
+    fn contrast(color: Color32) -> Color32 {
+        Color32::from_rgb(
+            u8::wrapping_add(color.r(), 128),
+            u8::wrapping_add(color.g(), 128),
+            u8::wrapping_add(color.b(), 128),
+        )
+    }
 
+    fn add_body_contents(&self, body: TableBody<'_>) {
         let diffs0 = if let Ok(diffs0) = self.diffs0.try_lock() {
             diffs0
         } else {
@@ -344,12 +348,12 @@ impl HexApp {
                     match cell {
                         Some(&HexCell::Same { value, source_id }) => ui.label(
                             RichText::new(format!("{value:02X}"))
-                                .color(color(source_id))
+                                .color(Self::color(source_id))
                                 .monospace(),
                         ),
                         Some(&HexCell::Diff { value, source_id }) => {
-                            let color = color(source_id);
-                            let contrast = contrast(color);
+                            let color = Self::color(source_id);
+                            let contrast = Self::contrast(color);
                             ui.label(
                                 RichText::new(format!("{value:02X}"))
                                     .color(contrast)
@@ -371,12 +375,12 @@ impl HexApp {
                     match cell {
                         Some(&HexCell::Same { value, source_id }) => ui.label(
                             RichText::new(format!("{}", value as char))
-                                .color(color(source_id))
+                                .color(Self::color(source_id))
                                 .monospace(),
                         ),
                         Some(&HexCell::Diff { value, source_id }) => {
-                            let color = color(source_id);
-                            let contrast = contrast(color);
+                            let color = Self::color(source_id);
+                            let contrast = Self::contrast(color);
 
                             ui.label(
                                 RichText::new(format!("{}", value as char))
