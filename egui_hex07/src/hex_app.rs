@@ -45,6 +45,8 @@ pub struct HexApp {
     egui_context: Context,
     job_running: Arc<AtomicBool>,
     cancel_job: Arc<AtomicBool>,
+    document_map_top_edge: f32,
+    document_map_bottom_edge: f32,
 }
 
 fn random_pattern() -> Vec<u8> {
@@ -72,6 +74,8 @@ impl HexApp {
             egui_context: cc.egui_ctx.clone(),
             job_running: Arc::new(AtomicBool::new(false)),
             cancel_job: Arc::new(AtomicBool::new(false)),
+            document_map_top_edge: 0.0,
+            document_map_bottom_edge: 0.0,
         };
 
         result.update_diffs();
@@ -534,7 +538,7 @@ impl eframe::App for HexApp {
             });
 
             egui::ScrollArea::horizontal().show(ui, |ui| {
-                TableBuilder::new(ui)
+                let scroll_area_output = TableBuilder::new(ui)
                     .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                     .striped(true)
                     .column(Column::auto().resizable(true))
@@ -544,6 +548,18 @@ impl eframe::App for HexApp {
                     .column(Column::remainder())
                     .header(20.0, |header| self.add_header_row(header))
                     .body(|body| self.add_body_contents(body));
+
+                let top_edge = scroll_area_output.state.offset.y;
+                let to_bottom_edge = scroll_area_output.inner_rect.height();
+                let content_height = scroll_area_output.content_size.y;
+
+                if content_height.abs() > f32::EPSILON {
+                    self.document_map_top_edge = top_edge / content_height;
+                    self.document_map_bottom_edge = (top_edge + to_bottom_edge) / content_height;
+                } else {
+                    self.document_map_top_edge = 0.0;
+                    self.document_map_bottom_edge = 0.0;
+                }
             });
         });
     }
