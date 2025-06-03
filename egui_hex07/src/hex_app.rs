@@ -1,8 +1,8 @@
 use crate::diff::{self, HexCell};
 use arb_comp06::{bpe::Bpe, matcher, re_pair::RePair, test_patterns, test_utils};
 use egui::{
-    Color32, ColorImage, Context, Response, RichText, Sense, Stroke, StrokeKind, TextureHandle,
-    TextureOptions, Ui,
+    Color32, ColorImage, Context, Rect, Response, RichText, Sense, Stroke, StrokeKind,
+    TextureHandle, TextureOptions, Ui,
 };
 use egui_extras::{Column, TableBody, TableBuilder, TableRow};
 use rand::Rng;
@@ -462,7 +462,12 @@ impl eframe::App for HexApp {
         egui::SidePanel::right("document_map_panel")
             .exact_width(250.0)
             .show(ctx, |ui| {
-                draw_document_map(ui, self.diffs_texture0.clone());
+                draw_document_map(
+                    ui,
+                    self.diffs_texture0.clone(),
+                    self.document_map_top_edge,
+                    self.document_map_bottom_edge,
+                );
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -565,7 +570,12 @@ impl eframe::App for HexApp {
     }
 }
 
-fn draw_document_map(ui: &mut Ui, texture_h: TextureHandle) -> Response {
+fn draw_document_map(
+    ui: &mut Ui,
+    texture_h: TextureHandle,
+    bar_top_edge: f32,
+    bar_bottom_edge: f32,
+) -> Response {
     let draw_rect = ui.max_rect();
 
     let (response, painter) = ui.allocate_painter(draw_rect.size(), Sense::click_and_drag());
@@ -580,6 +590,13 @@ fn draw_document_map(ui: &mut Ui, texture_h: TextureHandle) -> Response {
     );
 
     egui::Image::new(&texture_h).paint_at(ui, draw_rect);
+
+    let mut bar_rect = draw_rect;
+    let base = draw_rect.min.y;
+    bar_rect.min.y = base + draw_rect.height() * bar_top_edge;
+    bar_rect.max.y = base + draw_rect.height() * bar_bottom_edge;
+
+    painter.rect_filled(bar_rect, 10.0, Color32::from_white_alpha(32));
 
     response
 }
