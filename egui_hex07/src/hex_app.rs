@@ -456,10 +456,7 @@ impl eframe::App for HexApp {
         });
 
         egui::SidePanel::right("document_map_panel")
-            .default_width(140.0)
-            .min_width(140.0)
-            .max_width(200.0)
-            //.frame(Frame::NONE)
+            .exact_width(250.0)
             .show(ctx, |ui| {
                 draw_document_map(ui, self.diffs_texture0.clone());
             });
@@ -536,16 +533,18 @@ impl eframe::App for HexApp {
                 ui.label(RichText::new(format!("new id: {new_id:?}")));
             });
 
-            TableBuilder::new(ui)
-                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                .striped(true)
-                .column(Column::auto().resizable(true))
-                .column(Column::auto().resizable(true))
-                .column(Column::auto().resizable(true))
-                .column(Column::auto().resizable(true))
-                .column(Column::remainder())
-                .header(20.0, |header| self.add_header_row(header))
-                .body(|body| self.add_body_contents(body));
+            egui::ScrollArea::horizontal().show(ui, |ui| {
+                TableBuilder::new(ui)
+                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                    .striped(true)
+                    .column(Column::auto().resizable(true))
+                    .column(Column::auto().resizable(true))
+                    .column(Column::auto().resizable(true))
+                    .column(Column::auto().resizable(true))
+                    .column(Column::remainder())
+                    .header(20.0, |header| self.add_header_row(header))
+                    .body(|body| self.add_body_contents(body));
+            });
         });
     }
 }
