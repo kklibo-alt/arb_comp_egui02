@@ -2,7 +2,7 @@ use crate::diff::{self, HexCell};
 use arb_comp06::{bpe::Bpe, matcher, re_pair::RePair, test_patterns, test_utils};
 use egui::{
     Color32, ColorImage, Context, Pos2, Rect, Response, RichText, Sense, Stroke, StrokeKind,
-    TextureHandle, TextureOptions, Ui,
+    TextureHandle, TextureOptions, Ui, Vec2,
 };
 use egui_extras::{Column, TableBody, TableBuilder, TableRow};
 use rand::Rng;
@@ -63,7 +63,7 @@ impl DocumentViewState {
         view_window_height: f32,
         document_height: f32,
     ) {
-        if document_height.abs() > f32::EPSILON {
+        if document_height > f32::EPSILON {
             self.view_area_top_edge = scroll_from_top / document_height;
             self.view_area_bottom_edge = (scroll_from_top + view_window_height) / document_height;
         } else {
@@ -85,6 +85,15 @@ impl DocumentViewState {
 
         let scroll_from_top = center_on.y - view_window_height / 2.0;
         self.set_view_window(scroll_from_top, view_window_height, document_height);
+    }
+
+    pub fn drag_view_window(&mut self, document_rect: Rect, drag_delta: Vec2) {
+        let document_height = document_rect.height();
+        if document_height > f32::EPSILON {
+            let drag_ratio = drag_delta.y / document_height;
+            self.view_area_top_edge += drag_ratio;
+            self.view_area_bottom_edge += drag_ratio;
+        }
     }
 }
 
@@ -641,7 +650,14 @@ fn draw_document_map(
             }
         }
     }
-
+    if response.dragged() {
+        if let Some(pos) = response.interact_pointer_pos() {
+            if document_view_state.is_in_view_window(draw_rect, pos) {
+                document_view_state.drag_view_window(draw_rect, response.drag_delta());
+            }
+        }
+    }
+    
     painter.debug_rect(draw_rect, Color32::RED, "document_map");
 
     painter.rect_stroke(
