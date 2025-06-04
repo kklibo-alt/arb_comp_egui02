@@ -74,6 +74,11 @@ impl DocumentViewState {
         // Eventually: decide how to handle view windows that exceed document bounds.
     }
 
+    pub fn is_in_view_window(&self, document_rect: Rect, pos: Pos2) -> bool {
+        let view_window = self.view_window(document_rect);
+        view_window.contains(pos)
+    }
+
     pub fn center_view_window(&mut self, document_rect: Rect, center_on: Pos2) {
         let document_height = document_rect.height();
         let view_window_height = self.view_window(document_rect).height();
@@ -631,7 +636,9 @@ fn draw_document_map(
 
     if response.clicked() {
         if let Some(pos) = response.interact_pointer_pos() {
-            document_view_state.center_view_window(draw_rect, pos);
+            if !document_view_state.is_in_view_window(draw_rect, pos) {
+                document_view_state.center_view_window(draw_rect, pos);
+            }
         }
     }
 
