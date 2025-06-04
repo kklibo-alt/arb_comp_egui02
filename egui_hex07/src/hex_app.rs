@@ -1,7 +1,7 @@
 use crate::diff::{self, HexCell};
 use arb_comp06::{bpe::Bpe, matcher, re_pair::RePair, test_patterns, test_utils};
 use egui::{
-    Color32, ColorImage, Context, Rect, Response, RichText, Sense, Stroke, StrokeKind,
+    Color32, ColorImage, Context, Pos2, Rect, Response, RichText, Sense, Stroke, StrokeKind,
     TextureHandle, TextureOptions, Ui,
 };
 use egui_extras::{Column, TableBody, TableBuilder, TableRow};
@@ -70,6 +70,16 @@ impl DocumentViewState {
             self.view_area_top_edge = 0.0;
             self.view_area_bottom_edge = 0.0;
         }
+
+        // Eventually: decide how to handle view windows that exceed document bounds.
+    }
+
+    pub fn center_view_window(&mut self, document_rect: Rect, center_on: Pos2) {
+        let document_height = document_rect.height();
+        let view_window_height = self.view_window(document_rect).height();
+
+        let scroll_from_top = center_on.y - view_window_height / 2.0;
+        self.set_view_window(scroll_from_top, view_window_height, document_height);
     }
 }
 
@@ -618,6 +628,12 @@ fn draw_document_map(
     let draw_rect = ui.max_rect();
 
     let (response, painter) = ui.allocate_painter(draw_rect.size(), Sense::click_and_drag());
+
+    if response.clicked() {
+        if let Some(pos) = response.interact_pointer_pos() {
+            document_view_state.center_view_window(draw_rect, pos);
+        }
+    }
 
     painter.debug_rect(draw_rect, Color32::RED, "document_map");
 
