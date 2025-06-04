@@ -43,6 +43,11 @@ struct DocumentViewState {
 }
 
 impl DocumentViewState {
+    /// Height between the top of the document and the top of the view window.
+    pub fn vertical_scroll_offset(&self, document_height: f32) -> f32 {
+        document_height * self.view_area_top_edge
+    }
+
     /// The view window on a full document represented by `document_rect`.
     pub fn view_window(&self, document_rect: Rect) -> Rect {
         let mut view_rect = document_rect;
@@ -83,6 +88,7 @@ pub struct HexApp {
     job_running: Arc<AtomicBool>,
     cancel_job: Arc<AtomicBool>,
     document_view_state: DocumentViewState,
+    table_height: f32,
 }
 
 fn random_pattern() -> Vec<u8> {
@@ -111,6 +117,7 @@ impl HexApp {
             job_running: Arc::new(AtomicBool::new(false)),
             cancel_job: Arc::new(AtomicBool::new(false)),
             document_view_state: DocumentViewState::default(),
+            table_height: 0.0,
         };
 
         result.update_diffs();
@@ -585,9 +592,14 @@ impl eframe::App for HexApp {
                     .column(Column::auto().resizable(true))
                     .column(Column::auto().resizable(true))
                     .column(Column::remainder())
+                    .vertical_scroll_offset(
+                        self.document_view_state
+                            .vertical_scroll_offset(self.table_height),
+                    )
                     .header(20.0, |header| self.add_header_row(header))
                     .body(|body| self.add_body_contents(body));
 
+                self.table_height = scroll_area_output.content_size.y;
                 self.document_view_state.set_view_window(
                     scroll_area_output.state.offset.y,
                     scroll_area_output.inner_rect.height(),
