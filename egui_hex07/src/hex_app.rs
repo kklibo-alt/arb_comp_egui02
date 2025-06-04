@@ -31,6 +31,43 @@ enum DiffMethod {
     RePairGreedy00,
 }
 
+#[derive(Debug, Default)]
+/// Models a rectangular document area with a vertically-sliding view window.
+struct DocumentViewState {
+    /// The top edge of the current view of the document,
+    /// as a proportion of height, measured from the top of the document.
+    pub view_area_top_edge: f32,
+    /// The bottom edge of the current view of the document,
+    /// as a proportion of height, measured from the top of the document.
+    pub view_area_bottom_edge: f32,
+}
+
+impl DocumentViewState {
+    /// The view window on a full document represented by `document_rect`.
+    pub fn view_window(&self, document_rect: Rect) -> Rect {
+        let mut view_rect = document_rect;
+        let base = document_rect.min.y;
+        view_rect.min.y = base + document_rect.height() * self.view_area_top_edge;
+        view_rect.max.y = base + document_rect.height() * self.view_area_bottom_edge;
+        view_rect
+    }
+
+    pub fn set_view_window(
+        &mut self,
+        scroll_from_top: f32,
+        view_window_height: f32,
+        document_height: f32,
+    ) {
+        if document_height.abs() > f32::EPSILON {
+            self.view_area_top_edge = scroll_from_top / document_height;
+            self.view_area_bottom_edge = (scroll_from_top + view_window_height) / document_height;
+        } else {
+            self.view_area_top_edge = 0.0;
+            self.view_area_bottom_edge = 0.0;
+        }
+    }
+}
+
 pub struct HexApp {
     source_name0: Option<String>,
     source_name1: Option<String>,
@@ -45,8 +82,7 @@ pub struct HexApp {
     egui_context: Context,
     job_running: Arc<AtomicBool>,
     cancel_job: Arc<AtomicBool>,
-    document_map_top_edge: f32,
-    document_map_bottom_edge: f32,
+    document_view_state: DocumentViewState,
 }
 
 fn random_pattern() -> Vec<u8> {
@@ -74,8 +110,7 @@ impl HexApp {
             egui_context: cc.egui_ctx.clone(),
             job_running: Arc::new(AtomicBool::new(false)),
             cancel_job: Arc::new(AtomicBool::new(false)),
-            document_map_top_edge: 0.0,
-            document_map_bottom_edge: 0.0,
+            document_view_state: DocumentViewState::default(),
         };
 
         result.update_diffs();
@@ -465,8 +500,7 @@ impl eframe::App for HexApp {
                 draw_document_map(
                     ui,
                     self.diffs_texture0.clone(),
-                    self.document_map_top_edge,
-                    self.document_map_bottom_edge,
+                    &mut self.document_view_state,
                 );
             });
 
@@ -554,17 +588,11 @@ impl eframe::App for HexApp {
                     .header(20.0, |header| self.add_header_row(header))
                     .body(|body| self.add_body_contents(body));
 
-                let top_edge = scroll_area_output.state.offset.y;
-                let to_bottom_edge = scroll_area_output.inner_rect.height();
-                let content_height = scroll_area_output.content_size.y;
-
-                if content_height.abs() > f32::EPSILON {
-                    self.document_map_top_edge = top_edge / content_height;
-                    self.document_map_bottom_edge = (top_edge + to_bottom_edge) / content_height;
-                } else {
-                    self.document_map_top_edge = 0.0;
-                    self.document_map_bottom_edge = 0.0;
-                }
+                self.document_view_state.set_view_window(
+                    scroll_area_output.state.offset.y,
+                    scroll_area_output.inner_rect.height(),
+                    scroll_area_output.content_size.y,
+                );
             });
         });
     }
@@ -573,8 +601,7 @@ impl eframe::App for HexApp {
 fn draw_document_map(
     ui: &mut Ui,
     texture_h: TextureHandle,
-    bar_top_edge: f32,
-    bar_bottom_edge: f32,
+    document_view_state: &mut DocumentViewState,
 ) -> Response {
     let draw_rect = ui.max_rect();
 
@@ -591,11 +618,7 @@ fn draw_document_map(
 
     egui::Image::new(&texture_h).paint_at(ui, draw_rect);
 
-    let mut bar_rect = draw_rect;
-    let base = draw_rect.min.y;
-    bar_rect.min.y = base + draw_rect.height() * bar_top_edge;
-    bar_rect.max.y = base + draw_rect.height() * bar_bottom_edge;
-
+    let bar_rect = document_view_state.view_window(draw_rect);
     painter.rect_filled(bar_rect, 10.0, Color32::from_white_alpha(32));
 
     response
