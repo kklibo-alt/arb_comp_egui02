@@ -40,6 +40,10 @@ struct ScrollDrag {
     start_scroll: f32,
 }
 
+#[derive(Debug, Default, Copy, Clone)]
+/// This value is a unitless ratio of something else.
+struct Ratio(f32);
+
 #[derive(Debug, Default)]
 /// Models a rectangular document area with a vertically-sliding view window.
 struct DocumentViewState {
@@ -51,6 +55,15 @@ struct DocumentViewState {
 }
 
 impl DocumentViewState {
+    pub fn ratio_from_height(&self, height: f32, document_rect: Rect) -> Ratio {
+        let ratio = height / document_rect.height();
+        Ratio(if ratio.is_finite() { ratio } else { 0.0 })
+    }
+
+    pub fn ratio_from_pos(&self, pos: Pos2, document_rect: Rect) -> Ratio {
+        self.ratio_from_height(pos.y - document_rect.top(), document_rect)
+    }
+
     /// Height between the top of the document and the top of the view window.
     pub fn vertical_scroll_offset(&self, document_height: f32) -> f32 {
         document_height * self.scroll_from_top
@@ -89,12 +102,8 @@ impl DocumentViewState {
         self.view_window(document_rect).contains(pos)
     }
 
-    pub fn center_view_window(&mut self, document_rect: Rect, center_on: Pos2) {
-        let document_height = document_rect.height();
-        let view_window_height = self.view_window(document_rect).height();
-
-        let scroll_from_top = center_on.y - view_window_height / 2.0;
-        self.set_view_window(scroll_from_top, view_window_height, document_rect);
+    pub fn center_view_window(&mut self, center_on: Ratio) {
+        self.scroll_from_top = center_on.0 - 0.5 * self.window_height
     }
 
     pub fn drag_view_window(
@@ -666,7 +675,8 @@ fn draw_document_map(
     if response.clicked() {
         if let Some(pos) = response.interact_pointer_pos() {
             if !document_view_state.is_in_view_window(draw_rect, pos) {
-                document_view_state.center_view_window(draw_rect, pos);
+                let center = document_view_state.ratio_from_pos(pos, draw_rect);
+                document_view_state.center_view_window(center);
             }
         }
     }
