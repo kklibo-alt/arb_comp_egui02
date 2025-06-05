@@ -44,6 +44,12 @@ struct ScrollDrag {
 /// This value is a unitless ratio of something else.
 struct Ratio(f32);
 
+impl Ratio {
+    fn valid_or_zero(ratio: f32) -> Self {
+        Self(if ratio.is_finite() { ratio } else { 0.0 })
+    }
+}
+
 #[derive(Debug, Default)]
 /// Models a rectangular document area with a vertically-sliding view window.
 struct DocumentViewState {
@@ -56,8 +62,7 @@ struct DocumentViewState {
 
 impl DocumentViewState {
     pub fn ratio_from_height(&self, height: f32, document_rect: Rect) -> Ratio {
-        let ratio = height / document_rect.height();
-        Ratio(if ratio.is_finite() { ratio } else { 0.0 })
+        Ratio::valid_or_zero(height / document_rect.height())
     }
 
     pub fn ratio_from_pos(&self, pos: Pos2, document_rect: Rect) -> Ratio {
@@ -643,16 +648,13 @@ impl eframe::App for HexApp {
                 let table_height = scroll_area_output.content_size.y;
                 self.table_height = table_height;
 
-                let scroll_from_top = scroll_area_output.state.offset.y / table_height;
-                let view_window_height = scroll_area_output.inner_rect.height() / table_height;
+                let scroll_from_top =
+                    Ratio::valid_or_zero(scroll_area_output.state.offset.y / table_height);
+                let view_window_height =
+                    Ratio::valid_or_zero(scroll_area_output.inner_rect.height() / table_height);
 
-                if scroll_from_top.is_finite() && view_window_height.is_finite() {
-                    self.document_view_state
-                        .set_view_window(Ratio(scroll_from_top), Ratio(view_window_height));
-                } else {
-                    self.document_view_state
-                        .set_view_window(Ratio(0.0), Ratio(0.0));
-                }
+                self.document_view_state
+                    .set_view_window(scroll_from_top, view_window_height);
             });
         });
     }
