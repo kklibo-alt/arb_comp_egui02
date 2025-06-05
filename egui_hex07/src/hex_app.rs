@@ -87,12 +87,13 @@ impl DocumentViewState {
         self.set_view_window(scroll_from_top, view_window_height, document_height);
     }
 
-    pub fn drag_view_window(&mut self, document_rect: Rect, drag_delta: Vec2) {
+    pub fn drag_view_window(&mut self, document_rect: Rect, drag_start: f32, drag_offset: Vec2) {
         let document_height = document_rect.height();
+        let view_area_height = self.view_area_bottom_edge - self.view_area_top_edge;
         if document_height > f32::EPSILON {
-            let drag_ratio = drag_delta.y / document_height;
-            self.view_area_top_edge += drag_ratio;
-            self.view_area_bottom_edge += drag_ratio;
+            let drag_ratio = drag_offset.y / document_height;
+            self.view_area_top_edge = drag_start + drag_ratio;
+            self.view_area_bottom_edge = self.view_area_top_edge + view_area_height;
         }
     }
 }
@@ -113,6 +114,7 @@ pub struct HexApp {
     cancel_job: Arc<AtomicBool>,
     document_view_state: DocumentViewState,
     table_height: f32,
+    document_map_drag: Option<(Pos2, f32)>,
 }
 
 fn random_pattern() -> Vec<u8> {
@@ -142,6 +144,7 @@ impl HexApp {
             cancel_job: Arc::new(AtomicBool::new(false)),
             document_view_state: DocumentViewState::default(),
             table_height: 0.0,
+            document_map_drag: None,
         };
 
         result.update_diffs();
@@ -532,6 +535,7 @@ impl eframe::App for HexApp {
                     ui,
                     self.diffs_texture0.clone(),
                     &mut self.document_view_state,
+                    &mut self.document_map_drag,
                 );
             });
 
@@ -638,6 +642,7 @@ fn draw_document_map(
     ui: &mut Ui,
     texture_h: TextureHandle,
     document_view_state: &mut DocumentViewState,
+    view_window_drag: &mut Option<(Pos2, f32)>,
 ) -> Response {
     let draw_rect = ui.max_rect();
 
@@ -650,14 +655,26 @@ fn draw_document_map(
             }
         }
     }
-    if response.dragged() {
+    
+    if response.drag_started() {
         if let Some(pos) = response.interact_pointer_pos() {
             if document_view_state.is_in_view_window(draw_rect, pos) {
-                document_view_state.drag_view_window(draw_rect, response.drag_delta());
+                *view_window_drag = Some((pos, document_view_state.view_area_top_edge));
             }
         }
     }
-    
+    if response.dragged() {
+        if let Some(pos) = response.interact_pointer_pos() {
+            if let Some((drag_start, start_top_edge)) = view_window_drag {
+                let delta = pos - *drag_start;
+                document_view_state.drag_view_window(draw_rect, *start_top_edge, delta);
+            }
+        }
+    }
+    if response.drag_stopped() {
+        *view_window_drag = None;
+    }
+
     painter.debug_rect(draw_rect, Color32::RED, "document_map");
 
     painter.rect_stroke(
