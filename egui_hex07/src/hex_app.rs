@@ -31,7 +31,7 @@ enum DiffMethod {
     RePairGreedy00,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Copy, Clone)]
 /// Represents an active mousedrag on a scrolling object in the UI.
 struct ScrollDrag {
     /// The mouse position when the drag started.
@@ -96,12 +96,18 @@ impl DocumentViewState {
         self.set_view_window(scroll_from_top, view_window_height, document_height);
     }
 
-    pub fn drag_view_window(&mut self, document_rect: Rect, drag_start: f32, drag_offset: Vec2) {
+    pub fn drag_view_window(
+        &mut self,
+        document_rect: Rect,
+        drag_start: ScrollDrag,
+        drag_pos: Pos2,
+    ) {
         let document_height = document_rect.height();
         let view_area_height = self.view_area_bottom_edge - self.view_area_top_edge;
         if document_height > f32::EPSILON {
+            let drag_offset = drag_pos - drag_start.start_pos;
             let drag_ratio = drag_offset.y / document_height;
-            self.view_area_top_edge = drag_start + drag_ratio;
+            self.view_area_top_edge = drag_start.start_scroll + drag_ratio;
             self.view_area_bottom_edge = self.view_area_top_edge + view_area_height;
         }
     }
@@ -677,13 +683,8 @@ fn draw_document_map(
     }
     if response.dragged() {
         if let Some(pos) = response.interact_pointer_pos() {
-            if let Some(ScrollDrag {
-                start_pos,
-                start_scroll,
-            }) = view_window_drag
-            {
-                let delta = pos - *start_pos;
-                document_view_state.drag_view_window(draw_rect, *start_scroll, delta);
+            if let Some(scroll_drag) = view_window_drag {
+                document_view_state.drag_view_window(draw_rect, *scroll_drag, pos);
             }
         }
     }
