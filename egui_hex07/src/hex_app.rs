@@ -55,23 +55,26 @@ impl Ratio {
 struct DocumentViewState {
     /// The distance from the top of the document to the top of the
     /// view window, as a proportion of document height.
-    pub scroll_from_top: f32,
+    scroll_from_top: f32,
     /// The height of the view window, as a proportion of document height.
-    pub window_height: f32,
+    window_height: f32,
 }
 
 impl DocumentViewState {
-    pub fn ratio_from_height(&self, height: f32, document_rect: Rect) -> Ratio {
+    pub fn ratio_from_height(height: f32, document_rect: Rect) -> Ratio {
         Ratio::valid_or_zero(height / document_rect.height())
     }
 
-    pub fn ratio_from_pos(&self, pos: Pos2, document_rect: Rect) -> Ratio {
-        self.ratio_from_height(pos.y - document_rect.top(), document_rect)
+    pub fn ratio_from_pos(pos: Pos2, document_rect: Rect) -> Ratio {
+        Self::ratio_from_height(pos.y - document_rect.top(), document_rect)
     }
 
-    /// Height between the top of the document and the top of the view window.
-    pub fn vertical_scroll_offset(&self, document_height: f32) -> f32 {
-        document_height * self.scroll_from_top
+    pub fn scroll_from_top(&self) -> Ratio {
+        Ratio(self.scroll_from_top)
+    }
+
+    pub fn window_height(&self) -> Ratio {
+        Ratio(self.window_height)
     }
 
     /// The view window on a full document represented by `document_rect`.
@@ -639,8 +642,7 @@ impl eframe::App for HexApp {
                     .column(Column::auto().resizable(true))
                     .column(Column::remainder())
                     .vertical_scroll_offset(
-                        self.document_view_state
-                            .vertical_scroll_offset(self.table_height),
+                        self.table_height * self.document_view_state.scroll_from_top().0,
                     )
                     .header(20.0, |header| self.add_header_row(header))
                     .body(|body| self.add_body_contents(body));
@@ -673,7 +675,7 @@ fn draw_document_map(
     if response.clicked() {
         if let Some(pos) = response.interact_pointer_pos() {
             if !document_view_state.is_in_view_window(draw_rect, pos) {
-                let center = document_view_state.ratio_from_pos(pos, draw_rect);
+                let center = DocumentViewState::ratio_from_pos(pos, draw_rect);
                 document_view_state.center_view_window(center);
             }
         }
