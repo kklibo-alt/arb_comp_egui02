@@ -32,6 +32,15 @@ enum DiffMethod {
 }
 
 #[derive(Debug, Default)]
+/// Represents an active mousedrag on a scrolling object in the UI.
+struct ScrollDrag {
+    /// The mouse position when the drag started.
+    start_pos: Pos2,
+    /// The scroll value when the drag started.
+    start_scroll: f32,
+}
+
+#[derive(Debug, Default)]
 /// Models a rectangular document area with a vertically-sliding view window.
 struct DocumentViewState {
     /// The top edge of the current view of the document,
@@ -114,7 +123,7 @@ pub struct HexApp {
     cancel_job: Arc<AtomicBool>,
     document_view_state: DocumentViewState,
     table_height: f32,
-    document_map_drag: Option<(Pos2, f32)>,
+    document_map_drag: Option<ScrollDrag>,
 }
 
 fn random_pattern() -> Vec<u8> {
@@ -642,7 +651,7 @@ fn draw_document_map(
     ui: &mut Ui,
     texture_h: TextureHandle,
     document_view_state: &mut DocumentViewState,
-    view_window_drag: &mut Option<(Pos2, f32)>,
+    view_window_drag: &mut Option<ScrollDrag>,
 ) -> Response {
     let draw_rect = ui.max_rect();
 
@@ -655,19 +664,26 @@ fn draw_document_map(
             }
         }
     }
-    
+
     if response.drag_started() {
         if let Some(pos) = response.interact_pointer_pos() {
             if document_view_state.is_in_view_window(draw_rect, pos) {
-                *view_window_drag = Some((pos, document_view_state.view_area_top_edge));
+                *view_window_drag = Some(ScrollDrag {
+                    start_pos: pos,
+                    start_scroll: document_view_state.view_area_top_edge,
+                });
             }
         }
     }
     if response.dragged() {
         if let Some(pos) = response.interact_pointer_pos() {
-            if let Some((drag_start, start_top_edge)) = view_window_drag {
-                let delta = pos - *drag_start;
-                document_view_state.drag_view_window(draw_rect, *start_top_edge, delta);
+            if let Some(ScrollDrag {
+                start_pos,
+                start_scroll,
+            }) = view_window_drag
+            {
+                let delta = pos - *start_pos;
+                document_view_state.drag_view_window(draw_rect, *start_scroll, delta);
             }
         }
     }
