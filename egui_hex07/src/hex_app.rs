@@ -43,49 +43,50 @@ struct ScrollDrag {
 #[derive(Debug, Default)]
 /// Models a rectangular document area with a vertically-sliding view window.
 struct DocumentViewState {
-    /// The top edge of the current view of the document,
-    /// as a proportion of height, measured from the top of the document.
-    pub view_area_top_edge: f32,
-    /// The bottom edge of the current view of the document,
-    /// as a proportion of height, measured from the top of the document.
-    pub view_area_bottom_edge: f32,
+    /// The distance from the top of the document to the top of the
+    /// view window, as a proportion of document height.
+    pub scroll_from_top: f32,
+    /// The height of the view window, as a proportion of document height.
+    pub window_height: f32,
 }
 
 impl DocumentViewState {
     /// Height between the top of the document and the top of the view window.
     pub fn vertical_scroll_offset(&self, document_height: f32) -> f32 {
-        document_height * self.view_area_top_edge
+        document_height * self.scroll_from_top
     }
 
     /// The view window on a full document represented by `document_rect`.
     pub fn view_window(&self, document_rect: Rect) -> Rect {
-        let mut view_rect = document_rect;
-        let base = document_rect.min.y;
-        view_rect.min.y = base + document_rect.height() * self.view_area_top_edge;
-        view_rect.max.y = base + document_rect.height() * self.view_area_bottom_edge;
-        view_rect
+        let top = document_rect.top() + document_rect.height() * self.scroll_from_top;
+        let bottom = top + document_rect.height() * self.window_height;
+
+        Rect::from_min_max(
+            Pos2::new(document_rect.left(), top),
+            Pos2::new(document_rect.right(), bottom),
+        )
     }
 
     pub fn set_view_window(
         &mut self,
         scroll_from_top: f32,
-        view_window_height: f32,
-        document_height: f32,
+        window_height: f32,
+        document_rect: Rect,
     ) {
+        let document_height = document_rect.height();
         if document_height > f32::EPSILON {
-            self.view_area_top_edge = scroll_from_top / document_height;
-            self.view_area_bottom_edge = (scroll_from_top + view_window_height) / document_height;
+            self.scroll_from_top = scroll_from_top / document_height;
+            self.window_height = window_height / document_height;
         } else {
-            self.view_area_top_edge = 0.0;
-            self.view_area_bottom_edge = 0.0;
+            self.scroll_from_top = 0.0;
+            self.window_height = 0.0;
         }
 
         // Eventually: decide how to handle view windows that exceed document bounds.
     }
 
     pub fn is_in_view_window(&self, document_rect: Rect, pos: Pos2) -> bool {
-        let view_window = self.view_window(document_rect);
-        view_window.contains(pos)
+        self.view_window(document_rect).contains(pos)
     }
 
     pub fn center_view_window(&mut self, document_rect: Rect, center_on: Pos2) {
@@ -93,7 +94,7 @@ impl DocumentViewState {
         let view_window_height = self.view_window(document_rect).height();
 
         let scroll_from_top = center_on.y - view_window_height / 2.0;
-        self.set_view_window(scroll_from_top, view_window_height, document_height);
+        self.set_view_window(scroll_from_top, view_window_height, document_rect);
     }
 
     pub fn drag_view_window(
@@ -103,12 +104,11 @@ impl DocumentViewState {
         drag_pos: Pos2,
     ) {
         let document_height = document_rect.height();
-        let view_area_height = self.view_area_bottom_edge - self.view_area_top_edge;
+        let view_area_height = document_rect.height() * self.window_height;
         if document_height > f32::EPSILON {
             let drag_offset = drag_pos - drag_start.start_pos;
             let drag_ratio = drag_offset.y / document_height;
-            self.view_area_top_edge = drag_start.start_scroll + drag_ratio;
-            self.view_area_bottom_edge = self.view_area_top_edge + view_area_height;
+            self.scroll_from_top = drag_start.start_scroll + drag_ratio;
         }
     }
 }
@@ -646,7 +646,7 @@ impl eframe::App for HexApp {
                 self.document_view_state.set_view_window(
                     scroll_area_output.state.offset.y,
                     scroll_area_output.inner_rect.height(),
-                    scroll_area_output.content_size.y,
+                    Rect::from_min_size(Pos2::default(), scroll_area_output.content_size),
                 );
             });
         });
@@ -676,7 +676,7 @@ fn draw_document_map(
             if document_view_state.is_in_view_window(draw_rect, pos) {
                 *view_window_drag = Some(ScrollDrag {
                     start_pos: pos,
-                    start_scroll: document_view_state.view_area_top_edge,
+                    start_scroll: document_view_state.scroll_from_top,
                 });
             }
         }
