@@ -55,9 +55,9 @@ impl Ratio {
 struct DocumentViewState {
     /// The distance from the top of the document to the top of the
     /// view window, as a proportion of document height.
-    scroll_from_top: f32,
+    scroll_from_top: Ratio,
     /// The height of the view window, as a proportion of document height.
-    window_height: f32,
+    window_height: Ratio,
 }
 
 impl DocumentViewState {
@@ -70,17 +70,17 @@ impl DocumentViewState {
     }
 
     pub fn scroll_from_top(&self) -> Ratio {
-        Ratio(self.scroll_from_top)
+        self.scroll_from_top
     }
 
     pub fn window_height(&self) -> Ratio {
-        Ratio(self.window_height)
+        self.window_height
     }
 
     /// The view window on a full document represented by `document_rect`.
     pub fn view_window(&self, document_rect: Rect) -> Rect {
-        let top = document_rect.top() + document_rect.height() * self.scroll_from_top;
-        let bottom = top + document_rect.height() * self.window_height;
+        let top = document_rect.top() + document_rect.height() * self.scroll_from_top.0;
+        let bottom = top + document_rect.height() * self.window_height.0;
 
         Rect::from_min_max(
             Pos2::new(document_rect.left(), top),
@@ -89,8 +89,8 @@ impl DocumentViewState {
     }
 
     pub fn set_view_window(&mut self, scroll_from_top: Ratio, window_height: Ratio) {
-        self.scroll_from_top = scroll_from_top.0;
-        self.window_height = window_height.0;
+        self.scroll_from_top = scroll_from_top;
+        self.window_height = window_height;
 
         // Eventually: decide how to handle view windows that exceed document bounds.
     }
@@ -100,7 +100,7 @@ impl DocumentViewState {
     }
 
     pub fn center_view_window(&mut self, center_on: Ratio) {
-        self.scroll_from_top = center_on.0 - 0.5 * self.window_height
+        self.scroll_from_top = Ratio(center_on.0 - 0.5 * self.window_height.0)
     }
 
     pub fn drag_view_window(
@@ -110,11 +110,11 @@ impl DocumentViewState {
         drag_pos: Pos2,
     ) {
         let document_height = document_rect.height();
-        let view_area_height = document_rect.height() * self.window_height;
+        let view_area_height = document_rect.height() * self.window_height.0;
         if document_height > f32::EPSILON {
             let drag_offset = drag_pos - drag_start.start_pos;
             let drag_ratio = drag_offset.y / document_height;
-            self.scroll_from_top = drag_start.start_scroll + drag_ratio;
+            self.scroll_from_top = Ratio(drag_start.start_scroll + drag_ratio);
         }
     }
 }
@@ -686,7 +686,7 @@ fn draw_document_map(
             if document_view_state.is_in_view_window(draw_rect, pos) {
                 *view_window_drag = Some(ScrollDrag {
                     start_pos: pos,
-                    start_scroll: document_view_state.scroll_from_top,
+                    start_scroll: document_view_state.scroll_from_top().0,
                 });
             }
         }
