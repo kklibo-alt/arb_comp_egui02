@@ -80,20 +80,9 @@ impl DocumentViewState {
         )
     }
 
-    pub fn set_view_window(
-        &mut self,
-        scroll_from_top: f32,
-        window_height: f32,
-        document_rect: Rect,
-    ) {
-        let document_height = document_rect.height();
-        if document_height > f32::EPSILON {
-            self.scroll_from_top = scroll_from_top / document_height;
-            self.window_height = window_height / document_height;
-        } else {
-            self.scroll_from_top = 0.0;
-            self.window_height = 0.0;
-        }
+    pub fn set_view_window(&mut self, scroll_from_top: Ratio, window_height: Ratio) {
+        self.scroll_from_top = scroll_from_top.0;
+        self.window_height = window_height.0;
 
         // Eventually: decide how to handle view windows that exceed document bounds.
     }
@@ -651,12 +640,19 @@ impl eframe::App for HexApp {
                     .header(20.0, |header| self.add_header_row(header))
                     .body(|body| self.add_body_contents(body));
 
-                self.table_height = scroll_area_output.content_size.y;
-                self.document_view_state.set_view_window(
-                    scroll_area_output.state.offset.y,
-                    scroll_area_output.inner_rect.height(),
-                    Rect::from_min_size(Pos2::default(), scroll_area_output.content_size),
-                );
+                let table_height = scroll_area_output.content_size.y;
+                self.table_height = table_height;
+
+                let scroll_from_top = scroll_area_output.state.offset.y / table_height;
+                let view_window_height = scroll_area_output.inner_rect.height() / table_height;
+
+                if scroll_from_top.is_finite() && view_window_height.is_finite() {
+                    self.document_view_state
+                        .set_view_window(Ratio(scroll_from_top), Ratio(view_window_height));
+                } else {
+                    self.document_view_state
+                        .set_view_window(Ratio(0.0), Ratio(0.0));
+                }
             });
         });
     }
