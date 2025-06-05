@@ -37,7 +37,7 @@ struct ScrollDrag {
     /// The mouse position when the drag started.
     start_pos: Pos2,
     /// The scroll value when the drag started.
-    start_scroll: f32,
+    start_scroll: Ratio,
 }
 
 #[derive(Debug, Default, Copy, Clone)]
@@ -88,6 +88,10 @@ impl DocumentViewState {
         )
     }
 
+    pub fn set_view_window_scroll(&mut self, scroll_from_top: Ratio) {
+        self.set_view_window(scroll_from_top, self.window_height);
+    }
+
     pub fn set_view_window(&mut self, scroll_from_top: Ratio, window_height: Ratio) {
         self.scroll_from_top = scroll_from_top;
         self.window_height = window_height;
@@ -101,21 +105,6 @@ impl DocumentViewState {
 
     pub fn center_view_window(&mut self, center_on: Ratio) {
         self.scroll_from_top = Ratio(center_on.0 - 0.5 * self.window_height.0)
-    }
-
-    pub fn drag_view_window(
-        &mut self,
-        document_rect: Rect,
-        drag_start: ScrollDrag,
-        drag_pos: Pos2,
-    ) {
-        let document_height = document_rect.height();
-        let view_area_height = document_rect.height() * self.window_height.0;
-        if document_height > f32::EPSILON {
-            let drag_offset = drag_pos - drag_start.start_pos;
-            let drag_ratio = drag_offset.y / document_height;
-            self.scroll_from_top = Ratio(drag_start.start_scroll + drag_ratio);
-        }
     }
 }
 
@@ -686,15 +675,22 @@ fn draw_document_map(
             if document_view_state.is_in_view_window(draw_rect, pos) {
                 *view_window_drag = Some(ScrollDrag {
                     start_pos: pos,
-                    start_scroll: document_view_state.scroll_from_top().0,
+                    start_scroll: document_view_state.scroll_from_top(),
                 });
             }
         }
     }
     if response.dragged() {
         if let Some(pos) = response.interact_pointer_pos() {
-            if let Some(scroll_drag) = view_window_drag {
-                document_view_state.drag_view_window(draw_rect, *scroll_drag, pos);
+            if let Some(ScrollDrag {
+                start_pos,
+                start_scroll,
+            }) = view_window_drag
+            {
+                let drag_scroll =
+                    DocumentViewState::ratio_from_height(pos.y - start_pos.y, draw_rect);
+
+                document_view_state.set_view_window_scroll(Ratio(drag_scroll.0 + start_scroll.0));
             }
         }
     }
