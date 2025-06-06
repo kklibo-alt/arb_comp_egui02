@@ -126,6 +126,7 @@ pub struct HexApp {
     document_view_state: DocumentViewState,
     table_height: f32,
     document_map_drag: Option<ScrollDrag>,
+    hex_grid_width: usize,
 }
 
 fn random_pattern() -> Vec<u8> {
@@ -160,6 +161,7 @@ impl HexApp {
             document_view_state: DocumentViewState::default(),
             table_height: 0.0,
             document_map_drag: None,
+            hex_grid_width: 16,
         };
 
         result.update_diffs();
@@ -201,6 +203,8 @@ impl HexApp {
         let mut diffs_texture1 = self.diffs_texture1.clone();
 
         let diff_method = self.diff_method;
+        let hex_grid_width = self.hex_grid_width;
+
         #[cfg(not(target_arch = "wasm32"))]
         let egui_context = self.egui_context.clone();
 
@@ -294,10 +298,10 @@ impl HexApp {
                     (vec![], vec![])
                 };
 
-            fn cells_to_image(cells: &[HexCell]) -> ColorImage {
-                let columns = 16;
-                let rows = cells.len().div_ceil(columns);
+            let columns = hex_grid_width;
+            let rows = std::cmp::max(new_diffs0.len(), new_diffs1.len()).div_ceil(columns);
 
+            let cells_to_image = |cells: &[HexCell]| -> ColorImage {
                 let mut color_image = ColorImage::new([columns, rows], Color32::TRANSPARENT);
 
                 for (&h, p) in cells.iter().zip(color_image.pixels.iter_mut()) {
@@ -318,7 +322,7 @@ impl HexApp {
                     }
                 }
                 color_image
-            }
+            };
 
             let color_image0 = cells_to_image(&new_diffs0);
             let color_image1 = cells_to_image(&new_diffs1);
@@ -435,7 +439,7 @@ impl HexApp {
             return;
         };
 
-        let hex_grid_width = 16;
+        let hex_grid_width = self.hex_grid_width;
 
         let row_height = 18.0;
         let num_rows = std::cmp::max(diffs0.len(), diffs1.len()).div_ceil(hex_grid_width);
