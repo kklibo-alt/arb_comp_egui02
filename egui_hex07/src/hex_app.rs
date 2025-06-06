@@ -474,9 +474,18 @@ impl HexApp {
                 (0..hex_grid_width).for_each(|i| {
                     let cell = diffs.get(i + row_index * hex_grid_width);
 
+                    fn clean_ascii(value: u8) -> char {
+                        let ch = value as char;
+                        if ch.is_ascii_control() || ch.is_ascii_whitespace() {
+                            ' '
+                        } else {
+                            ch
+                        }
+                    }
+
                     match cell {
                         Some(&HexCell::Same { value, source_id }) => ui.label(
-                            RichText::new(format!("{}", value as char))
+                            RichText::new(format!("{}", clean_ascii(value)))
                                 .color(Self::color(source_id))
                                 .monospace(),
                         ),
@@ -485,7 +494,7 @@ impl HexApp {
                             let contrast = Self::contrast(color);
 
                             ui.label(
-                                RichText::new(format!("{}", value as char))
+                                RichText::new(format!("{}", clean_ascii(value)))
                                     .color(contrast)
                                     .background_color(color)
                                     .monospace(),
