@@ -438,7 +438,7 @@ impl HexApp {
         let hex_grid_width = 16;
 
         let row_height = 18.0;
-        let num_rows = 1 + std::cmp::max(diffs0.len(), diffs1.len()) / hex_grid_width;
+        let num_rows = std::cmp::max(diffs0.len(), diffs1.len()).div_ceil(hex_grid_width);
 
         body.rows(row_height, num_rows, |mut row| {
             let row_index = row.index();
