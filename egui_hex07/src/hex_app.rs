@@ -2,7 +2,7 @@ use crate::diff::{self, HexCell};
 use arb_comp06::{bpe::Bpe, matcher, re_pair::RePair, test_patterns, test_utils};
 use egui::{
     Color32, ColorImage, Context, Pos2, Rect, Response, RichText, Sense, Stroke, StrokeKind,
-    TextureHandle, TextureOptions, Ui, Vec2,
+    TextureHandle, TextureOptions, Ui,
 };
 use egui_extras::{Column, TableBody, TableBuilder, TableRow};
 use rand::Rng;
@@ -73,6 +73,7 @@ impl DocumentViewState {
         self.scroll_from_top
     }
 
+    #[allow(dead_code)]
     pub fn window_height(&self) -> Ratio {
         self.window_height
     }
@@ -309,16 +310,20 @@ impl HexApp {
 
                 for (&h, p) in cells.iter().zip(color_image.pixels.iter_mut()) {
                     match h {
-                        HexCell::Same { value, source_id } => {
+                        HexCell::Same {
+                            value: _,
+                            source_id,
+                        } => {
                             *p = if document_map_boolean_diff {
                                 Color32::DARK_GREEN
                             } else {
-                                let color = HexApp::color(source_id);
-                                let contrast = HexApp::contrast(color);
-                                contrast
+                                HexApp::contrast(HexApp::color(source_id))
                             };
                         }
-                        HexCell::Diff { value, source_id } => {
+                        HexCell::Diff {
+                            value: _,
+                            source_id,
+                        } => {
                             *p = if document_map_boolean_diff {
                                 Color32::LIGHT_GREEN
                             } else {
