@@ -728,7 +728,9 @@ fn draw_document_map(
         StrokeKind::Inside,
     );
 
-    let (left, right) = draw_rect.split_left_right_at_fraction(0.5);
+    let (mut left, mut right) = draw_rect.split_left_right_at_fraction(0.5);
+    *left.right_mut() -= 1.0;
+    *right.left_mut() += 1.0;
 
     egui::Image::new(&texture_h0).paint_at(ui, left);
     egui::Image::new(&texture_h1).paint_at(ui, right);
