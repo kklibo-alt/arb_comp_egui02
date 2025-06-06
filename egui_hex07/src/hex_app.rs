@@ -116,6 +116,7 @@ pub struct HexApp {
     diffs0: Arc<Mutex<Vec<HexCell>>>,
     diffs1: Arc<Mutex<Vec<HexCell>>>,
     diffs_texture0: TextureHandle,
+    diffs_texture1: TextureHandle,
     file_drop_target: WhichFile,
     diff_method: DiffMethod,
     update_new_id_rx: Option<mpsc::Receiver<usize>>,
@@ -137,6 +138,9 @@ impl HexApp {
         let texture_handle0 =
             cc.egui_ctx
                 .load_texture("document_map0", ColorImage::default(), Default::default());
+        let texture_handle1 =
+            cc.egui_ctx
+                .load_texture("document_map1", ColorImage::default(), Default::default());
 
         let mut result = Self {
             source_name0: Some("zeroes0".to_string()),
@@ -146,6 +150,7 @@ impl HexApp {
             diffs0: Arc::new(Mutex::new(vec![])),
             diffs1: Arc::new(Mutex::new(vec![])),
             diffs_texture0: texture_handle0,
+            diffs_texture1: texture_handle1,
             file_drop_target: WhichFile::File0,
             diff_method: DiffMethod::ByIndex,
             update_new_id_rx: None,
@@ -193,6 +198,7 @@ impl HexApp {
         let diffs1 = self.diffs1.clone();
 
         let mut diffs_texture0 = self.diffs_texture0.clone();
+        let mut diffs_texture1 = self.diffs_texture1.clone();
 
         let diff_method = self.diff_method;
         #[cfg(not(target_arch = "wasm32"))]
@@ -288,32 +294,45 @@ impl HexApp {
                     (vec![], vec![])
                 };
 
-            let columns = 16;
-            let rows = new_diffs0.len().div_ceil(columns);
+            fn cells_to_image(cells: &[HexCell]) -> ColorImage {
+                let columns = 16;
+                let rows = cells.len().div_ceil(columns);
 
-            let mut color_image = ColorImage::new([columns, rows], Color32::TRANSPARENT);
+                let mut color_image = ColorImage::new([columns, rows], Color32::TRANSPARENT);
 
-            for (&h, p) in new_diffs0.iter().zip(color_image.pixels.iter_mut()) {
-                match h {
-                    HexCell::Same { value, source_id } => {
-                        //*p = Color32::from_rgba_premultiplied(0, 0, 16 * (value % 16), 128);
-                        *p = Self::color(source_id);
-                    }
-                    HexCell::Diff { value, source_id } => {
-                        //*p = Color32::from_rgba_premultiplied(16 * (value % 16), 0, 0, 128);
-                        let color = Self::color(source_id);
-                        let contrast = Self::contrast(color);
-                        *p = contrast;
-                    }
-                    HexCell::Blank => {
-                        *p = Color32::from_rgba_premultiplied(0, 0, 0, 128);
+                for (&h, p) in cells.iter().zip(color_image.pixels.iter_mut()) {
+                    match h {
+                        HexCell::Same { value, source_id } => {
+                            //*p = Color32::from_rgba_premultiplied(0, 0, 16 * (value % 16), 128);
+                            *p = HexApp::color(source_id);
+                        }
+                        HexCell::Diff { value, source_id } => {
+                            //*p = Color32::from_rgba_premultiplied(16 * (value % 16), 0, 0, 128);
+                            let color = HexApp::color(source_id);
+                            let contrast = HexApp::contrast(color);
+                            *p = contrast;
+                        }
+                        HexCell::Blank => {
+                            *p = Color32::from_rgba_premultiplied(0, 0, 0, 128);
+                        }
                     }
                 }
+                color_image
             }
+
+            let color_image0 = cells_to_image(&new_diffs0);
+            let color_image1 = cells_to_image(&new_diffs1);
 
             // Can this block the main thread?
             diffs_texture0.set(
-                color_image,
+                color_image0,
+                TextureOptions {
+                    magnification: egui::TextureFilter::Nearest,
+                    ..Default::default()
+                },
+            );
+            diffs_texture1.set(
+                color_image1,
                 TextureOptions {
                     magnification: egui::TextureFilter::Nearest,
                     ..Default::default()
@@ -544,6 +563,7 @@ impl eframe::App for HexApp {
                 draw_document_map(
                     ui,
                     self.diffs_texture0.clone(),
+                    self.diffs_texture1.clone(),
                     &mut self.document_view_state,
                     &mut self.document_map_drag,
                 );
@@ -653,7 +673,8 @@ impl eframe::App for HexApp {
 
 fn draw_document_map(
     ui: &mut Ui,
-    texture_h: TextureHandle,
+    texture_h0: TextureHandle,
+    texture_h1: TextureHandle,
     document_view_state: &mut DocumentViewState,
     view_window_drag: &mut Option<ScrollDrag>,
 ) -> Response {
@@ -707,7 +728,10 @@ fn draw_document_map(
         StrokeKind::Inside,
     );
 
-    egui::Image::new(&texture_h).paint_at(ui, draw_rect);
+    let (left, right) = draw_rect.split_left_right_at_fraction(0.5);
+
+    egui::Image::new(&texture_h0).paint_at(ui, left);
+    egui::Image::new(&texture_h1).paint_at(ui, right);
 
     let bar_rect = document_view_state.view_window(draw_rect);
     painter.rect_filled(bar_rect, 10.0, Color32::from_white_alpha(32));
