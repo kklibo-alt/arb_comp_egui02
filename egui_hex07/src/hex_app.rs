@@ -126,6 +126,7 @@ pub struct HexApp {
     document_view_state: DocumentViewState,
     table_height: f32,
     document_map_drag: Option<ScrollDrag>,
+    document_map_boolean_diff: bool,
     hex_grid_width: usize,
 }
 
@@ -161,6 +162,7 @@ impl HexApp {
             document_view_state: DocumentViewState::default(),
             table_height: 0.0,
             document_map_drag: None,
+            document_map_boolean_diff: true,
             hex_grid_width: 16,
         };
 
@@ -204,6 +206,7 @@ impl HexApp {
 
         let diff_method = self.diff_method;
         let hex_grid_width = self.hex_grid_width;
+        let document_map_boolean_diff = self.document_map_boolean_diff;
 
         #[cfg(not(target_arch = "wasm32"))]
         let egui_context = self.egui_context.clone();
@@ -307,14 +310,20 @@ impl HexApp {
                 for (&h, p) in cells.iter().zip(color_image.pixels.iter_mut()) {
                     match h {
                         HexCell::Same { value, source_id } => {
-                            //*p = Color32::from_rgba_premultiplied(0, 0, 16 * (value % 16), 128);
-                            let color = HexApp::color(source_id);
-                            let contrast = HexApp::contrast(color);
-                            *p = contrast;
+                            *p = if document_map_boolean_diff {
+                                Color32::DARK_GREEN
+                            } else {
+                                let color = HexApp::color(source_id);
+                                let contrast = HexApp::contrast(color);
+                                contrast
+                            };
                         }
                         HexCell::Diff { value, source_id } => {
-                            //*p = Color32::from_rgba_premultiplied(16 * (value % 16), 0, 0, 128);
-                            *p = HexApp::color(source_id);
+                            *p = if document_map_boolean_diff {
+                                Color32::LIGHT_GREEN
+                            } else {
+                                HexApp::color(source_id)
+                            };
                         }
                         HexCell::Blank => {
                             *p = Color32::from_rgba_premultiplied(0, 0, 0, 128);
@@ -652,6 +661,10 @@ impl eframe::App for HexApp {
 
                 //display the new id
                 ui.label(RichText::new(format!("new id: {new_id:?}")));
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.checkbox(&mut self.document_map_boolean_diff, "Show Diff");
+                });
             });
 
             egui::ScrollArea::horizontal().show(ui, |ui| {
