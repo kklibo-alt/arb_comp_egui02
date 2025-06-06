@@ -308,13 +308,13 @@ impl HexApp {
                     match h {
                         HexCell::Same { value, source_id } => {
                             //*p = Color32::from_rgba_premultiplied(0, 0, 16 * (value % 16), 128);
-                            *p = HexApp::color(source_id);
-                        }
-                        HexCell::Diff { value, source_id } => {
-                            //*p = Color32::from_rgba_premultiplied(16 * (value % 16), 0, 0, 128);
                             let color = HexApp::color(source_id);
                             let contrast = HexApp::contrast(color);
                             *p = contrast;
+                        }
+                        HexCell::Diff { value, source_id } => {
+                            //*p = Color32::from_rgba_premultiplied(16 * (value % 16), 0, 0, 128);
+                            *p = HexApp::color(source_id);
                         }
                         HexCell::Blank => {
                             *p = Color32::from_rgba_premultiplied(0, 0, 0, 128);
