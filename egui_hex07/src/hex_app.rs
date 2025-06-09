@@ -129,6 +129,8 @@ pub struct HexApp {
     document_map_drag: Option<ScrollDrag>,
     document_map_boolean_diff: bool,
     hex_grid_width: usize,
+    platform_max_texture_side: usize,
+    document_map_draw_rect_height_pts: f32,
 }
 
 fn random_pattern() -> Vec<u8> {
@@ -144,6 +146,8 @@ impl HexApp {
         let texture_handle1 =
             cc.egui_ctx
                 .load_texture("document_map1", ColorImage::default(), Default::default());
+
+        let platform_max_texture_side = cc.egui_ctx.input(|i| i.max_texture_side);
 
         let mut result = Self {
             source_name0: Some("zeroes0".to_string()),
@@ -165,6 +169,8 @@ impl HexApp {
             document_map_drag: None,
             document_map_boolean_diff: true,
             hex_grid_width: 16,
+            platform_max_texture_side,
+            document_map_draw_rect_height_pts: 0f32,
         };
 
         result.update_diffs();
@@ -584,6 +590,7 @@ impl eframe::App for HexApp {
                     self.diffs_texture1.clone(),
                     &mut self.document_view_state,
                     &mut self.document_map_drag,
+                    &mut self.document_map_draw_rect_height_pts,
                 );
             });
 
@@ -626,6 +633,10 @@ impl eframe::App for HexApp {
                         (
                             "random_10k_minus_block",
                             test_patterns::random_10k_minus_block,
+                        ),
+                        (
+                            "random_1mb_minus_2_blocks",
+                            test_patterns::random_1mb_minus_2_blocks,
                         ),
                     ];
 
@@ -699,8 +710,10 @@ fn draw_document_map(
     texture_h1: TextureHandle,
     document_view_state: &mut DocumentViewState,
     view_window_drag: &mut Option<ScrollDrag>,
+    draw_rect_height_pts: &mut f32,
 ) -> Response {
     let draw_rect = ui.max_rect();
+    *draw_rect_height_pts = draw_rect.height();
 
     let (response, painter) = ui.allocate_painter(draw_rect.size(), Sense::click_and_drag());
 
