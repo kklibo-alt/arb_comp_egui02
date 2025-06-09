@@ -309,32 +309,23 @@ impl HexApp {
                 let mut color_image = ColorImage::new([columns, rows], Color32::TRANSPARENT);
 
                 for (&h, p) in cells.iter().zip(color_image.pixels.iter_mut()) {
-                    match h {
-                        HexCell::Same {
-                            value: _,
-                            source_id,
-                        } => {
-                            *p = if document_map_boolean_diff {
-                                Color32::DARK_GREEN
-                            } else {
+                    *p = if document_map_boolean_diff {
+                        match h {
+                            HexCell::Same { .. } => Color32::DARK_GREEN,
+                            HexCell::Diff { .. } => Color32::LIGHT_GREEN,
+                            HexCell::Blank => Color32::from_rgba_premultiplied(0, 0, 0, 128),
+                        }
+                    } else {
+                        match h {
+                            HexCell::Same { source_id, .. } => {
                                 HexApp::contrast(HexApp::color(source_id))
-                            };
-                        }
-                        HexCell::Diff {
-                            value: _,
-                            source_id,
-                        } => {
-                            *p = if document_map_boolean_diff {
-                                Color32::LIGHT_GREEN
-                            } else {
-                                HexApp::color(source_id)
-                            };
-                        }
-                        HexCell::Blank => {
-                            *p = Color32::from_rgba_premultiplied(0, 0, 0, 128);
+                            }
+                            HexCell::Diff { source_id, .. } => HexApp::color(source_id),
+                            HexCell::Blank => Color32::from_rgba_premultiplied(0, 0, 0, 128),
                         }
                     }
                 }
+
                 color_image
             };
 
