@@ -214,6 +214,8 @@ impl HexApp {
         let diff_method = self.diff_method;
         let hex_grid_width = self.hex_grid_width;
         let document_map_boolean_diff = self.document_map_boolean_diff;
+        let platform_max_texture_side = self.platform_max_texture_side;
+        let document_map_draw_rect_height_pts = self.document_map_draw_rect_height_pts;
 
         #[cfg(not(target_arch = "wasm32"))]
         let egui_context = self.egui_context.clone();
@@ -309,34 +311,60 @@ impl HexApp {
                 };
 
             let columns = hex_grid_width;
-            let rows = std::cmp::max(new_diffs0.len(), new_diffs1.len()).div_ceil(columns);
+            let hex_rows = std::cmp::max(new_diffs0.len(), new_diffs1.len()).div_ceil(columns);
 
-            let cells_to_image = |cells: &[HexCell]| -> ColorImage {
-                let mut color_image = ColorImage::new([columns, rows], Color32::TRANSPARENT);
+            // Eventually: replace this with num_traits::cast or other alternative?
+            let document_map_draw_rect_height_pts =
+                document_map_draw_rect_height_pts.floor() as usize;
 
-                for (&h, p) in cells.iter().zip(color_image.pixels.iter_mut()) {
-                    *p = if document_map_boolean_diff {
-                        match h {
-                            HexCell::Same { .. } => Color32::DARK_GREEN,
-                            HexCell::Diff { .. } => Color32::LIGHT_GREEN,
-                            HexCell::Blank => Color32::from_rgba_premultiplied(0, 0, 0, 128),
-                        }
-                    } else {
-                        match h {
-                            HexCell::Same { source_id, .. } => {
-                                HexApp::contrast(HexApp::color(source_id))
+            let (color_image0, color_image1) = if document_map_draw_rect_height_pts > 0 {
+                //assert!(document_map_draw_rect_height_pts > 0);
+                assert!(platform_max_texture_side > 0);
+
+                let hex_rows_per_image_row = hex_rows.div_ceil(std::cmp::min(
+                    document_map_draw_rect_height_pts,
+                    platform_max_texture_side,
+                ));
+                assert!(hex_rows_per_image_row > 0);
+                dbg!(hex_rows_per_image_row);
+                dbg!(hex_rows);
+                dbg!(document_map_draw_rect_height_pts);
+                dbg!(platform_max_texture_side);
+
+                let rows = hex_rows / hex_rows_per_image_row;
+
+                let cells_to_image = |cells: &[HexCell]| -> ColorImage {
+                    let mut color_image = ColorImage::new([columns, rows], Color32::TRANSPARENT);
+
+                    for (&h, p) in cells.iter().zip(color_image.pixels.iter_mut()) {
+                        *p = if document_map_boolean_diff {
+                            match h {
+                                HexCell::Same { .. } => Color32::DARK_GREEN,
+                                HexCell::Diff { .. } => Color32::LIGHT_GREEN,
+                                HexCell::Blank => Color32::from_rgba_premultiplied(0, 0, 0, 128),
                             }
-                            HexCell::Diff { source_id, .. } => HexApp::color(source_id),
-                            HexCell::Blank => Color32::from_rgba_premultiplied(0, 0, 0, 128),
+                        } else {
+                            match h {
+                                HexCell::Same { source_id, .. } => {
+                                    HexApp::contrast(HexApp::color(source_id))
+                                }
+                                HexCell::Diff { source_id, .. } => HexApp::color(source_id),
+                                HexCell::Blank => Color32::from_rgba_premultiplied(0, 0, 0, 128),
+                            }
                         }
                     }
-                }
 
-                color_image
+                    color_image
+                };
+
+                let color_image0 = cells_to_image(&new_diffs0);
+                let color_image1 = cells_to_image(&new_diffs1);
+                (color_image0, color_image1)
+            } else {
+                let color_image0 = ColorImage::default();
+                let color_image1 = ColorImage::default();
+                (color_image0, color_image1)
             };
-
-            let color_image0 = cells_to_image(&new_diffs0);
-            let color_image1 = cells_to_image(&new_diffs1);
 
             // Can this block the main thread?
             diffs_texture0.set(
