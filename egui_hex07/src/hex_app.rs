@@ -129,6 +129,8 @@ pub struct HexApp {
     document_map_drag: Option<ScrollDrag>,
     document_map_boolean_diff: bool,
     hex_grid_width: usize,
+    platform_max_texture_side: usize,
+    document_map_draw_rect_height_pts: f32,
 }
 
 fn random_pattern() -> Vec<u8> {
@@ -144,6 +146,8 @@ impl HexApp {
         let texture_handle1 =
             cc.egui_ctx
                 .load_texture("document_map1", ColorImage::default(), Default::default());
+
+        let platform_max_texture_side = cc.egui_ctx.input(|i| i.max_texture_side);
 
         let mut result = Self {
             source_name0: Some("zeroes0".to_string()),
@@ -165,6 +169,8 @@ impl HexApp {
             document_map_drag: None,
             document_map_boolean_diff: true,
             hex_grid_width: 16,
+            platform_max_texture_side,
+            document_map_draw_rect_height_pts: 0f32,
         };
 
         result.update_diffs();
@@ -208,6 +214,8 @@ impl HexApp {
         let diff_method = self.diff_method;
         let hex_grid_width = self.hex_grid_width;
         let document_map_boolean_diff = self.document_map_boolean_diff;
+        let platform_max_texture_side = self.platform_max_texture_side;
+        let document_map_draw_rect_height_pts = self.document_map_draw_rect_height_pts;
 
         #[cfg(not(target_arch = "wasm32"))]
         let egui_context = self.egui_context.clone();
@@ -303,43 +311,88 @@ impl HexApp {
                 };
 
             let columns = hex_grid_width;
-            let rows = std::cmp::max(new_diffs0.len(), new_diffs1.len()).div_ceil(columns);
+            let hex_rows = std::cmp::max(new_diffs0.len(), new_diffs1.len()).div_ceil(columns);
 
-            let cells_to_image = |cells: &[HexCell]| -> ColorImage {
-                let mut color_image = ColorImage::new([columns, rows], Color32::TRANSPARENT);
+            assert!(platform_max_texture_side > 0);
 
-                for (&h, p) in cells.iter().zip(color_image.pixels.iter_mut()) {
-                    match h {
-                        HexCell::Same {
-                            value: _,
-                            source_id,
-                        } => {
-                            *p = if document_map_boolean_diff {
-                                Color32::DARK_GREEN
-                            } else {
-                                HexApp::contrast(HexApp::color(source_id))
-                            };
+            let max_image_rows =
+                document_map_draw_rect_height_pts.min(platform_max_texture_side as f32);
+
+            //dbg!(hex_rows);
+            //dbg!(document_map_draw_rect_height_pts);
+            //dbg!(platform_max_texture_side);
+
+            let (color_image0, color_image1) = if max_image_rows > 1f32 {
+                let ratio_log = (hex_rows as f32 / max_image_rows).log2().max(0.0).ceil();
+                //fix: check pow
+                let hex_rows_per_image_row = 2usize.pow(ratio_log as u32);
+
+                //dbg!(hex_rows_per_image_row);
+                assert!(hex_rows_per_image_row > 0);
+
+                let rows = (hex_rows / hex_rows_per_image_row) as usize;
+
+                let cells_to_image = |cells: &[HexCell]| -> ColorImage {
+                    let mut color_image = ColorImage::new([columns, rows], Color32::TRANSPARENT);
+
+                    for (hex_cell_rows, image_row) in cells
+                        .chunks(columns * hex_rows_per_image_row)
+                        .zip(color_image.pixels.chunks_mut(columns))
+                    {
+                        let mut column_color_totals = vec![(0u64, 0u64, 0u64); columns];
+                        fn add(color: Color32, totals: &mut (u64, u64, u64)) {
+                            totals.0 += color.r() as u64;
+                            totals.1 += color.g() as u64;
+                            totals.2 += color.b() as u64;
                         }
-                        HexCell::Diff {
-                            value: _,
-                            source_id,
-                        } => {
-                            *p = if document_map_boolean_diff {
-                                Color32::LIGHT_GREEN
-                            } else {
-                                HexApp::color(source_id)
-                            };
+
+                        for hex_cell_row in hex_cell_rows.chunks(columns) {
+                            for (&h, texel_color_totals) in
+                                hex_cell_row.iter().zip(&mut column_color_totals)
+                            {
+                                let color = if document_map_boolean_diff {
+                                    match h {
+                                        HexCell::Same { .. } => Color32::DARK_GREEN,
+                                        HexCell::Diff { .. } => Color32::LIGHT_GREEN,
+                                        HexCell::Blank => Color32::BLACK,
+                                    }
+                                } else {
+                                    match h {
+                                        HexCell::Same { source_id, .. } => {
+                                            HexApp::contrast(HexApp::color(source_id))
+                                        }
+                                        HexCell::Diff { source_id, .. } => HexApp::color(source_id),
+                                        HexCell::Blank => Color32::BLACK,
+                                    }
+                                };
+                                add(color, texel_color_totals);
+                            }
                         }
-                        HexCell::Blank => {
-                            *p = Color32::from_rgba_premultiplied(0, 0, 0, 128);
+
+                        for (column_color_total, texel_color) in
+                            column_color_totals.iter().zip(&mut *image_row)
+                        {
+                            let average_color = Color32::from_rgb(
+                                (column_color_total.0 / hex_rows_per_image_row as u64) as u8,
+                                (column_color_total.1 / hex_rows_per_image_row as u64) as u8,
+                                (column_color_total.2 / hex_rows_per_image_row as u64) as u8,
+                            );
+
+                            *texel_color = average_color;
                         }
                     }
-                }
-                color_image
-            };
 
-            let color_image0 = cells_to_image(&new_diffs0);
-            let color_image1 = cells_to_image(&new_diffs1);
+                    color_image
+                };
+
+                let color_image0 = cells_to_image(&new_diffs0);
+                let color_image1 = cells_to_image(&new_diffs1);
+                (color_image0, color_image1)
+            } else {
+                let color_image0 = ColorImage::default();
+                let color_image1 = ColorImage::default();
+                (color_image0, color_image1)
+            };
 
             // Can this block the main thread?
             diffs_texture0.set(
@@ -593,6 +646,7 @@ impl eframe::App for HexApp {
                     self.diffs_texture1.clone(),
                     &mut self.document_view_state,
                     &mut self.document_map_drag,
+                    &mut self.document_map_draw_rect_height_pts,
                 );
             });
 
@@ -635,6 +689,18 @@ impl eframe::App for HexApp {
                         (
                             "random_10k_minus_block",
                             test_patterns::random_10k_minus_block,
+                        ),
+                        (
+                            "random_20k_minus_block",
+                            test_patterns::random_20k_minus_block,
+                        ),
+                        (
+                            "random_50k_minus_block",
+                            test_patterns::random_50k_minus_block,
+                        ),
+                        (
+                            "random_1mb_minus_2_blocks",
+                            test_patterns::random_1mb_minus_2_blocks,
                         ),
                     ];
 
@@ -708,8 +774,10 @@ fn draw_document_map(
     texture_h1: TextureHandle,
     document_view_state: &mut DocumentViewState,
     view_window_drag: &mut Option<ScrollDrag>,
+    draw_rect_height_pts: &mut f32,
 ) -> Response {
     let draw_rect = ui.max_rect();
+    *draw_rect_height_pts = draw_rect.height();
 
     let (response, painter) = ui.allocate_painter(draw_rect.size(), Sense::click_and_drag());
 
