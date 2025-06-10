@@ -335,20 +335,49 @@ impl HexApp {
                 let cells_to_image = |cells: &[HexCell]| -> ColorImage {
                     let mut color_image = ColorImage::new([columns, rows], Color32::TRANSPARENT);
 
-                    for (&h, p) in cells.iter().zip(color_image.pixels.iter_mut()) {
-                        *p = if document_map_boolean_diff {
-                            match h {
-                                HexCell::Same { .. } => Color32::DARK_GREEN,
-                                HexCell::Diff { .. } => Color32::LIGHT_GREEN,
-                                HexCell::Blank => Color32::from_rgba_premultiplied(0, 0, 0, 128),
+                    for (hex_cell_rows, color_row) in cells
+                        .chunks(columns * hex_rows_per_image_row)
+                        .zip(color_image.pixels.chunks_mut(columns))
+                    {
+                        for hex_cell_row in hex_cell_rows.chunks(columns) {
+                            let mut column_color_totals = vec![(0u64, 0u64, 0u64); columns];
+                            fn add(color: Color32, totals: &mut (u64, u64, u64)) {
+                                totals.0 += color.r() as u64;
+                                totals.1 += color.g() as u64;
+                                totals.2 += color.b() as u64;
                             }
-                        } else {
-                            match h {
-                                HexCell::Same { source_id, .. } => {
-                                    HexApp::contrast(HexApp::color(source_id))
-                                }
-                                HexCell::Diff { source_id, .. } => HexApp::color(source_id),
-                                HexCell::Blank => Color32::from_rgba_premultiplied(0, 0, 0, 128),
+
+                            for (&h, texel_color_totals) in
+                                hex_cell_row.iter().zip(&mut column_color_totals)
+                            {
+                                let color = if document_map_boolean_diff {
+                                    match h {
+                                        HexCell::Same { .. } => Color32::DARK_GREEN,
+                                        HexCell::Diff { .. } => Color32::LIGHT_GREEN,
+                                        HexCell::Blank => Color32::BLACK,
+                                    }
+                                } else {
+                                    match h {
+                                        HexCell::Same { source_id, .. } => {
+                                            HexApp::contrast(HexApp::color(source_id))
+                                        }
+                                        HexCell::Diff { source_id, .. } => HexApp::color(source_id),
+                                        HexCell::Blank => Color32::BLACK,
+                                    }
+                                };
+                                add(color, texel_color_totals);
+                            }
+
+                            for (column_color_total, texel_color) in
+                                column_color_totals.iter().zip(&mut *color_row)
+                            {
+                                let average_color = Color32::from_rgb(
+                                    (column_color_total.0 / hex_rows_per_image_row as u64) as u8,
+                                    (column_color_total.1 / hex_rows_per_image_row as u64) as u8,
+                                    (column_color_total.2 / hex_rows_per_image_row as u64) as u8,
+                                );
+
+                                *texel_color = average_color;
                             }
                         }
                     }
@@ -660,6 +689,14 @@ impl eframe::App for HexApp {
                         (
                             "random_10k_minus_block",
                             test_patterns::random_10k_minus_block,
+                        ),
+                        (
+                            "random_20k_minus_block",
+                            test_patterns::random_20k_minus_block,
+                        ),
+                        (
+                            "random_50k_minus_block",
+                            test_patterns::random_50k_minus_block,
                         ),
                         (
                             "random_1mb_minus_2_blocks",
