@@ -313,25 +313,24 @@ impl HexApp {
             let columns = hex_grid_width;
             let hex_rows = std::cmp::max(new_diffs0.len(), new_diffs1.len()).div_ceil(columns);
 
-            // Eventually: replace this with num_traits::cast or other alternative?
-            let document_map_draw_rect_height_pts =
-                document_map_draw_rect_height_pts.floor() as usize;
+            assert!(platform_max_texture_side > 0);
 
-            let (color_image0, color_image1) = if document_map_draw_rect_height_pts > 0 {
-                //assert!(document_map_draw_rect_height_pts > 0);
-                assert!(platform_max_texture_side > 0);
+            let max_image_rows =
+                document_map_draw_rect_height_pts.min(platform_max_texture_side as f32);
 
-                let hex_rows_per_image_row = hex_rows.div_ceil(std::cmp::min(
-                    document_map_draw_rect_height_pts,
-                    platform_max_texture_side,
-                ));
-                assert!(hex_rows_per_image_row > 0);
+            dbg!(hex_rows);
+            dbg!(document_map_draw_rect_height_pts);
+            dbg!(platform_max_texture_side);
+
+            let (color_image0, color_image1) = if max_image_rows > 1f32 {
+                let ratio_log = (hex_rows as f32 / max_image_rows).log2().max(0.0).ceil();
+                //fix: check pow
+                let hex_rows_per_image_row = 2usize.pow(ratio_log as u32);
+
                 dbg!(hex_rows_per_image_row);
-                dbg!(hex_rows);
-                dbg!(document_map_draw_rect_height_pts);
-                dbg!(platform_max_texture_side);
+                assert!(hex_rows_per_image_row > 0);
 
-                let rows = hex_rows / hex_rows_per_image_row;
+                let rows = (hex_rows / hex_rows_per_image_row) as usize;
 
                 let cells_to_image = |cells: &[HexCell]| -> ColorImage {
                     let mut color_image = ColorImage::new([columns, rows], Color32::TRANSPARENT);
