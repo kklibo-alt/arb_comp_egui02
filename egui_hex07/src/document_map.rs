@@ -78,74 +78,86 @@ pub struct ScrollDrag {
     start_scroll: Ratio,
 }
 
-pub fn draw_document_map(
-    ui: &mut Ui,
-    texture_h0: TextureHandle,
-    texture_h1: TextureHandle,
-    document_view_state: &mut DocumentViewState,
-    view_window_drag: &mut Option<ScrollDrag>,
-    draw_rect_height_pts: &mut f32,
-) -> Response {
-    let draw_rect = ui.max_rect();
-    *draw_rect_height_pts = draw_rect.height();
+pub struct DocumentMap {
+    texture_handle0: TextureHandle,
+    texture_handle1: TextureHandle,
+    pub document_view_state: DocumentViewState,
+    view_window_drag: Option<ScrollDrag>,
+}
 
-    let (response, painter) = ui.allocate_painter(draw_rect.size(), Sense::click_and_drag());
-
-    if response.clicked() {
-        if let Some(pos) = response.interact_pointer_pos() {
-            if !document_view_state.is_in_view_window(draw_rect, pos) {
-                let center = DocumentViewState::ratio_from_pos(pos, draw_rect);
-                document_view_state.center_view_window(center);
-            }
+impl DocumentMap {
+    pub fn new(texture_handle0: TextureHandle, texture_handle1: TextureHandle) -> Self {
+        Self {
+            texture_handle0,
+            texture_handle1,
+            document_view_state: Default::default(),
+            view_window_drag: Default::default(),
         }
     }
 
-    if response.drag_started() {
-        if let Some(pos) = response.interact_pointer_pos() {
-            if document_view_state.is_in_view_window(draw_rect, pos) {
-                *view_window_drag = Some(ScrollDrag {
-                    start_pos: pos,
-                    start_scroll: document_view_state.scroll_from_top(),
-                });
+    pub fn draw(&mut self, ui: &mut Ui, draw_rect_height_pts: &mut f32) -> Response {
+        let draw_rect = ui.max_rect();
+        *draw_rect_height_pts = draw_rect.height();
+
+        let (response, painter) = ui.allocate_painter(draw_rect.size(), Sense::click_and_drag());
+
+        if response.clicked() {
+            if let Some(pos) = response.interact_pointer_pos() {
+                if !self.document_view_state.is_in_view_window(draw_rect, pos) {
+                    let center = DocumentViewState::ratio_from_pos(pos, draw_rect);
+                    self.document_view_state.center_view_window(center);
+                }
             }
         }
-    }
-    if response.dragged() {
-        if let Some(pos) = response.interact_pointer_pos() {
-            if let Some(ScrollDrag {
-                start_pos,
-                start_scroll,
-            }) = view_window_drag
-            {
-                let drag_scroll =
-                    DocumentViewState::ratio_from_height(pos.y - start_pos.y, draw_rect);
 
-                document_view_state.set_view_window_scroll(Ratio(drag_scroll.0 + start_scroll.0));
+        if response.drag_started() {
+            if let Some(pos) = response.interact_pointer_pos() {
+                if self.document_view_state.is_in_view_window(draw_rect, pos) {
+                    self.view_window_drag = Some(ScrollDrag {
+                        start_pos: pos,
+                        start_scroll: self.document_view_state.scroll_from_top(),
+                    });
+                }
             }
         }
+        if response.dragged() {
+            if let Some(pos) = response.interact_pointer_pos() {
+                if let Some(ScrollDrag {
+                    start_pos,
+                    start_scroll,
+                }) = self.view_window_drag
+                {
+                    let drag_scroll =
+                        DocumentViewState::ratio_from_height(pos.y - start_pos.y, draw_rect);
+
+                    self.document_view_state
+                        .set_view_window_scroll(Ratio(drag_scroll.0 + start_scroll.0));
+                }
+            }
+        }
+        if response.drag_stopped() {
+            self.view_window_drag = None;
+        }
+
+        painter.debug_rect(draw_rect, Color32::RED, "document_map");
+
+        painter.rect_stroke(
+            draw_rect,
+            10.0,
+            Stroke::new(1.0, Color32::ORANGE),
+            StrokeKind::Inside,
+        );
+
+        let (mut left, mut right) = draw_rect.split_left_right_at_fraction(0.5);
+        *left.right_mut() -= 1.0;
+        *right.left_mut() += 1.0;
+
+        egui::Image::new(&self.texture_handle0).paint_at(ui, left);
+        egui::Image::new(&self.texture_handle1).paint_at(ui, right);
+
+        let bar_rect = self.document_view_state.view_window(draw_rect);
+        painter.rect_filled(bar_rect, 10.0, Color32::from_white_alpha(32));
+
+        response
     }
-    if response.drag_stopped() {
-        *view_window_drag = None;
-    }
-
-    painter.debug_rect(draw_rect, Color32::RED, "document_map");
-
-    painter.rect_stroke(
-        draw_rect,
-        10.0,
-        Stroke::new(1.0, Color32::ORANGE),
-        StrokeKind::Inside,
-    );
-
-    let (mut left, mut right) = draw_rect.split_left_right_at_fraction(0.5);
-    *left.right_mut() -= 1.0;
-    *right.left_mut() += 1.0;
-
-    egui::Image::new(&texture_h0).paint_at(ui, left);
-    egui::Image::new(&texture_h1).paint_at(ui, right);
-
-    let bar_rect = document_view_state.view_window(draw_rect);
-    painter.rect_filled(bar_rect, 10.0, Color32::from_white_alpha(32));
-
-    response
 }

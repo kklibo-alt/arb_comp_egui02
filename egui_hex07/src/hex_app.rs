@@ -1,5 +1,5 @@
 use crate::diff::{self, HexCell};
-use crate::document_map::{draw_document_map, DocumentViewState, Ratio, ScrollDrag};
+use crate::document_map::{DocumentMap, Ratio};
 use arb_comp06::{bpe::Bpe, matcher, re_pair::RePair, test_patterns, test_utils};
 use egui::{Color32, ColorImage, Context, RichText, TextureHandle, TextureOptions, Ui};
 use egui_extras::{Column, TableBody, TableBuilder, TableRow};
@@ -44,13 +44,12 @@ pub struct HexApp {
     egui_context: Context,
     job_running: Arc<AtomicBool>,
     cancel_job: Arc<AtomicBool>,
-    document_view_state: DocumentViewState,
     table_height: f32,
-    document_map_drag: Option<ScrollDrag>,
     document_map_boolean_diff: bool,
     hex_grid_width: usize,
     platform_max_texture_side: usize,
     document_map_draw_rect_height_pts: f32,
+    document_map: DocumentMap,
 }
 
 fn random_pattern() -> Vec<u8> {
@@ -76,21 +75,20 @@ impl HexApp {
             pattern1: Arc::new(Mutex::new(Some(vec![0; 1000]))),
             diffs0: Arc::new(Mutex::new(vec![])),
             diffs1: Arc::new(Mutex::new(vec![])),
-            diffs_texture0: texture_handle0,
-            diffs_texture1: texture_handle1,
+            diffs_texture0: texture_handle0.clone(),
+            diffs_texture1: texture_handle1.clone(),
             file_drop_target: WhichFile::File0,
             diff_method: DiffMethod::ByIndex,
             update_new_id_rx: None,
             egui_context: cc.egui_ctx.clone(),
             job_running: Arc::new(AtomicBool::new(false)),
             cancel_job: Arc::new(AtomicBool::new(false)),
-            document_view_state: DocumentViewState::default(),
             table_height: 0.0,
-            document_map_drag: None,
             document_map_boolean_diff: true,
             hex_grid_width: 16,
             platform_max_texture_side,
             document_map_draw_rect_height_pts: 0f32,
+            document_map: DocumentMap::new(texture_handle0, texture_handle1),
         };
 
         result.update_diffs();
@@ -560,14 +558,8 @@ impl eframe::App for HexApp {
         egui::SidePanel::right("document_map_panel")
             .exact_width(250.0)
             .show(ctx, |ui| {
-                draw_document_map(
-                    ui,
-                    self.diffs_texture0.clone(),
-                    self.diffs_texture1.clone(),
-                    &mut self.document_view_state,
-                    &mut self.document_map_drag,
-                    &mut self.document_map_draw_rect_height_pts,
-                );
+                self.document_map
+                    .draw(ui, &mut self.document_map_draw_rect_height_pts);
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -668,7 +660,8 @@ impl eframe::App for HexApp {
                     .column(Column::auto().resizable(true))
                     .column(Column::remainder())
                     .vertical_scroll_offset(
-                        self.table_height * self.document_view_state.scroll_from_top().0,
+                        self.table_height
+                            * self.document_map.document_view_state.scroll_from_top().0,
                     )
                     .header(20.0, |header| self.add_header_row(header))
                     .body(|body| self.add_body_contents(body));
@@ -681,7 +674,8 @@ impl eframe::App for HexApp {
                 let view_window_height =
                     Ratio::valid_or_zero(scroll_area_output.inner_rect.height() / table_height);
 
-                self.document_view_state
+                self.document_map
+                    .document_view_state
                     .set_view_window(scroll_from_top, view_window_height);
             });
         });
