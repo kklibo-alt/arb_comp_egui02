@@ -335,18 +335,18 @@ impl HexApp {
                 let cells_to_image = |cells: &[HexCell]| -> ColorImage {
                     let mut color_image = ColorImage::new([columns, rows], Color32::TRANSPARENT);
 
-                    for (hex_cell_rows, color_row) in cells
+                    for (hex_cell_rows, image_row) in cells
                         .chunks(columns * hex_rows_per_image_row)
                         .zip(color_image.pixels.chunks_mut(columns))
                     {
-                        for hex_cell_row in hex_cell_rows.chunks(columns) {
-                            let mut column_color_totals = vec![(0u64, 0u64, 0u64); columns];
-                            fn add(color: Color32, totals: &mut (u64, u64, u64)) {
-                                totals.0 += color.r() as u64;
-                                totals.1 += color.g() as u64;
-                                totals.2 += color.b() as u64;
-                            }
+                        let mut column_color_totals = vec![(0u64, 0u64, 0u64); columns];
+                        fn add(color: Color32, totals: &mut (u64, u64, u64)) {
+                            totals.0 += color.r() as u64;
+                            totals.1 += color.g() as u64;
+                            totals.2 += color.b() as u64;
+                        }
 
+                        for hex_cell_row in hex_cell_rows.chunks(columns) {
                             for (&h, texel_color_totals) in
                                 hex_cell_row.iter().zip(&mut column_color_totals)
                             {
@@ -367,18 +367,18 @@ impl HexApp {
                                 };
                                 add(color, texel_color_totals);
                             }
+                        }
 
-                            for (column_color_total, texel_color) in
-                                column_color_totals.iter().zip(&mut *color_row)
-                            {
-                                let average_color = Color32::from_rgb(
-                                    (column_color_total.0 / hex_rows_per_image_row as u64) as u8,
-                                    (column_color_total.1 / hex_rows_per_image_row as u64) as u8,
-                                    (column_color_total.2 / hex_rows_per_image_row as u64) as u8,
-                                );
+                        for (column_color_total, texel_color) in
+                            column_color_totals.iter().zip(&mut *image_row)
+                        {
+                            let average_color = Color32::from_rgb(
+                                (column_color_total.0 / hex_rows_per_image_row as u64) as u8,
+                                (column_color_total.1 / hex_rows_per_image_row as u64) as u8,
+                                (column_color_total.2 / hex_rows_per_image_row as u64) as u8,
+                            );
 
-                                *texel_color = average_color;
-                            }
+                            *texel_color = average_color;
                         }
                     }
 
