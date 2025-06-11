@@ -113,6 +113,17 @@ impl DocumentMap {
         if response.drag_started() {
             if let Some(pos) = response.interact_pointer_pos() {
                 if self.document_view_state.is_in_view_window(draw_rect, pos) {
+                    // Start drag if inside view window
+                    self.view_window_drag = Some(ScrollDrag {
+                        start_pos: pos,
+                        start_scroll: self.document_view_state.scroll_from_top(),
+                    });
+                } else {
+                    // If drag starts outside view window, jump there first (like a click)
+                    let center = DocumentViewState::ratio_from_pos(pos, draw_rect);
+                    self.document_view_state.center_view_window(center);
+                    
+                    // Then start the drag from the new position
                     self.view_window_drag = Some(ScrollDrag {
                         start_pos: pos,
                         start_scroll: self.document_view_state.scroll_from_top(),
