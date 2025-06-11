@@ -101,28 +101,22 @@ impl DocumentMap {
 
         let (response, painter) = ui.allocate_painter(draw_rect.size(), Sense::click_and_drag());
 
-        if response.clicked() {
+        // Handle clicks and drag starts - both jump to position if outside view window
+        if response.clicked() || response.drag_started() {
             if let Some(pos) = response.interact_pointer_pos() {
-                if !self.document_view_state.is_in_view_window(draw_rect, pos) {
-                    let center = DocumentViewState::ratio_from_pos(pos, draw_rect);
-                    self.document_view_state.center_view_window(center);
-                }
-            }
-        }
-
-        if response.drag_started() {
-            if let Some(pos) = response.interact_pointer_pos() {
-                // If drag starts outside view window, jump there first (like a click)
+                // Jump to position if it's outside the current view window
                 if !self.document_view_state.is_in_view_window(draw_rect, pos) {
                     let center = DocumentViewState::ratio_from_pos(pos, draw_rect);
                     self.document_view_state.center_view_window(center);
                 }
                 
-                // Always start the drag after handling any necessary jump
-                self.view_window_drag = Some(ScrollDrag {
-                    start_pos: pos,
-                    start_scroll: self.document_view_state.scroll_from_top(),
-                });
+                // If this was a drag start, initialize the drag state
+                if response.drag_started() {
+                    self.view_window_drag = Some(ScrollDrag {
+                        start_pos: pos,
+                        start_scroll: self.document_view_state.scroll_from_top(),
+                    });
+                }
             }
         }
         if response.dragged() {
