@@ -1,9 +1,7 @@
 use crate::diff::{self, HexCell};
+use crate::document_map::{DocumentMap, Ratio};
 use arb_comp06::{bpe::Bpe, matcher, re_pair::RePair, test_patterns, test_utils};
-use egui::{
-    Color32, ColorImage, Context, Pos2, Rect, Response, RichText, Sense, Stroke, StrokeKind,
-    TextureHandle, TextureOptions, Ui,
-};
+use egui::{Color32, ColorImage, Context, RichText, TextureHandle, TextureOptions, Ui};
 use egui_extras::{Column, TableBody, TableBuilder, TableRow};
 use rand::Rng;
 use std::sync::{
@@ -31,84 +29,6 @@ enum DiffMethod {
     RePairGreedy00,
 }
 
-#[derive(Debug, Default, Copy, Clone)]
-/// Represents an active mousedrag on a scrolling object in the UI.
-struct ScrollDrag {
-    /// The mouse position when the drag started.
-    start_pos: Pos2,
-    /// The scroll value when the drag started.
-    start_scroll: Ratio,
-}
-
-#[derive(Debug, Default, Copy, Clone)]
-/// This value is a unitless ratio of something else.
-struct Ratio(f32);
-
-impl Ratio {
-    fn valid_or_zero(ratio: f32) -> Self {
-        Self(if ratio.is_finite() { ratio } else { 0.0 })
-    }
-}
-
-#[derive(Debug, Default)]
-/// Models a rectangular document area with a vertically-sliding view window.
-struct DocumentViewState {
-    /// The distance from the top of the document to the top of the
-    /// view window, as a proportion of document height.
-    scroll_from_top: Ratio,
-    /// The height of the view window, as a proportion of document height.
-    window_height: Ratio,
-}
-
-impl DocumentViewState {
-    pub fn ratio_from_height(height: f32, document_rect: Rect) -> Ratio {
-        Ratio::valid_or_zero(height / document_rect.height())
-    }
-
-    pub fn ratio_from_pos(pos: Pos2, document_rect: Rect) -> Ratio {
-        Self::ratio_from_height(pos.y - document_rect.top(), document_rect)
-    }
-
-    pub fn scroll_from_top(&self) -> Ratio {
-        self.scroll_from_top
-    }
-
-    #[allow(dead_code)]
-    pub fn window_height(&self) -> Ratio {
-        self.window_height
-    }
-
-    /// The view window on a full document represented by `document_rect`.
-    pub fn view_window(&self, document_rect: Rect) -> Rect {
-        let top = document_rect.top() + document_rect.height() * self.scroll_from_top.0;
-        let bottom = top + document_rect.height() * self.window_height.0;
-
-        Rect::from_min_max(
-            Pos2::new(document_rect.left(), top),
-            Pos2::new(document_rect.right(), bottom),
-        )
-    }
-
-    pub fn set_view_window_scroll(&mut self, scroll_from_top: Ratio) {
-        self.set_view_window(scroll_from_top, self.window_height);
-    }
-
-    pub fn set_view_window(&mut self, scroll_from_top: Ratio, window_height: Ratio) {
-        self.scroll_from_top = scroll_from_top;
-        self.window_height = window_height;
-
-        // Eventually: decide how to handle view windows that exceed document bounds.
-    }
-
-    pub fn is_in_view_window(&self, document_rect: Rect, pos: Pos2) -> bool {
-        self.view_window(document_rect).contains(pos)
-    }
-
-    pub fn center_view_window(&mut self, center_on: Ratio) {
-        self.scroll_from_top = Ratio(center_on.0 - 0.5 * self.window_height.0)
-    }
-}
-
 pub struct HexApp {
     source_name0: Option<String>,
     source_name1: Option<String>,
@@ -124,13 +44,12 @@ pub struct HexApp {
     egui_context: Context,
     job_running: Arc<AtomicBool>,
     cancel_job: Arc<AtomicBool>,
-    document_view_state: DocumentViewState,
     table_height: f32,
-    document_map_drag: Option<ScrollDrag>,
     document_map_boolean_diff: bool,
     hex_grid_width: usize,
     platform_max_texture_side: usize,
     document_map_draw_rect_height_pts: f32,
+    document_map: DocumentMap,
 }
 
 fn random_pattern() -> Vec<u8> {
@@ -156,21 +75,20 @@ impl HexApp {
             pattern1: Arc::new(Mutex::new(Some(vec![0; 1000]))),
             diffs0: Arc::new(Mutex::new(vec![])),
             diffs1: Arc::new(Mutex::new(vec![])),
-            diffs_texture0: texture_handle0,
-            diffs_texture1: texture_handle1,
+            diffs_texture0: texture_handle0.clone(),
+            diffs_texture1: texture_handle1.clone(),
             file_drop_target: WhichFile::File0,
             diff_method: DiffMethod::ByIndex,
             update_new_id_rx: None,
             egui_context: cc.egui_ctx.clone(),
             job_running: Arc::new(AtomicBool::new(false)),
             cancel_job: Arc::new(AtomicBool::new(false)),
-            document_view_state: DocumentViewState::default(),
             table_height: 0.0,
-            document_map_drag: None,
             document_map_boolean_diff: true,
             hex_grid_width: 16,
             platform_max_texture_side,
             document_map_draw_rect_height_pts: 0f32,
+            document_map: DocumentMap::new(texture_handle0, texture_handle1),
         };
 
         result.update_diffs();
@@ -640,14 +558,8 @@ impl eframe::App for HexApp {
         egui::SidePanel::right("document_map_panel")
             .exact_width(250.0)
             .show(ctx, |ui| {
-                draw_document_map(
-                    ui,
-                    self.diffs_texture0.clone(),
-                    self.diffs_texture1.clone(),
-                    &mut self.document_view_state,
-                    &mut self.document_map_drag,
-                    &mut self.document_map_draw_rect_height_pts,
-                );
+                self.document_map
+                    .draw(ui, &mut self.document_map_draw_rect_height_pts);
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -748,7 +660,8 @@ impl eframe::App for HexApp {
                     .column(Column::auto().resizable(true))
                     .column(Column::remainder())
                     .vertical_scroll_offset(
-                        self.table_height * self.document_view_state.scroll_from_top().0,
+                        self.table_height
+                            * self.document_map.document_view_state.scroll_from_top().0,
                     )
                     .header(20.0, |header| self.add_header_row(header))
                     .body(|body| self.add_body_contents(body));
@@ -761,81 +674,10 @@ impl eframe::App for HexApp {
                 let view_window_height =
                     Ratio::valid_or_zero(scroll_area_output.inner_rect.height() / table_height);
 
-                self.document_view_state
+                self.document_map
+                    .document_view_state
                     .set_view_window(scroll_from_top, view_window_height);
             });
         });
     }
-}
-
-fn draw_document_map(
-    ui: &mut Ui,
-    texture_h0: TextureHandle,
-    texture_h1: TextureHandle,
-    document_view_state: &mut DocumentViewState,
-    view_window_drag: &mut Option<ScrollDrag>,
-    draw_rect_height_pts: &mut f32,
-) -> Response {
-    let draw_rect = ui.max_rect();
-    *draw_rect_height_pts = draw_rect.height();
-
-    let (response, painter) = ui.allocate_painter(draw_rect.size(), Sense::click_and_drag());
-
-    if response.clicked() {
-        if let Some(pos) = response.interact_pointer_pos() {
-            if !document_view_state.is_in_view_window(draw_rect, pos) {
-                let center = DocumentViewState::ratio_from_pos(pos, draw_rect);
-                document_view_state.center_view_window(center);
-            }
-        }
-    }
-
-    if response.drag_started() {
-        if let Some(pos) = response.interact_pointer_pos() {
-            if document_view_state.is_in_view_window(draw_rect, pos) {
-                *view_window_drag = Some(ScrollDrag {
-                    start_pos: pos,
-                    start_scroll: document_view_state.scroll_from_top(),
-                });
-            }
-        }
-    }
-    if response.dragged() {
-        if let Some(pos) = response.interact_pointer_pos() {
-            if let Some(ScrollDrag {
-                start_pos,
-                start_scroll,
-            }) = view_window_drag
-            {
-                let drag_scroll =
-                    DocumentViewState::ratio_from_height(pos.y - start_pos.y, draw_rect);
-
-                document_view_state.set_view_window_scroll(Ratio(drag_scroll.0 + start_scroll.0));
-            }
-        }
-    }
-    if response.drag_stopped() {
-        *view_window_drag = None;
-    }
-
-    painter.debug_rect(draw_rect, Color32::RED, "document_map");
-
-    painter.rect_stroke(
-        draw_rect,
-        10.0,
-        Stroke::new(1.0, Color32::ORANGE),
-        StrokeKind::Inside,
-    );
-
-    let (mut left, mut right) = draw_rect.split_left_right_at_fraction(0.5);
-    *left.right_mut() -= 1.0;
-    *right.left_mut() += 1.0;
-
-    egui::Image::new(&texture_h0).paint_at(ui, left);
-    egui::Image::new(&texture_h1).paint_at(ui, right);
-
-    let bar_rect = document_view_state.view_window(draw_rect);
-    painter.rect_filled(bar_rect, 10.0, Color32::from_white_alpha(32));
-
-    response
 }
