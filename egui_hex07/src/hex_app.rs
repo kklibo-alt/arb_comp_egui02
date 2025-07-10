@@ -451,34 +451,56 @@ impl HexApp {
 
             let add_hex_row = |ui: &mut Ui, diffs: &Vec<HexCell>| {
                 (0..hex_grid_width).for_each(|i| {
-                    let cell = diffs.get(i + row_index * hex_grid_width);
+                    let cell_index = i + row_index * hex_grid_width;
+                    let cell = diffs.get(cell_index);
 
                     match cell {
-                        Some(&HexCell::Same { value, source_id }) => ui.label(
-                            RichText::new(format!("{value:02X}"))
-                                .color(Self::color(source_id))
-                                .monospace(),
-                        ),
+                        Some(&HexCell::Same { value, source_id }) => {
+                            let response = ui.label(
+                                RichText::new(format!("{value:02X}"))
+                                    .color(Self::color(source_id))
+                                    .monospace(),
+                            );
+                            
+                            // Add tooltip on hover
+                            response.on_hover_text(format!(
+                                "Cell Value: 0x{:02X} ({} decimal)\nFile Address: 0x{:08X}\nComparison Address: 0x{:08X}",
+                                value, value, cell_index, cell_index
+                            ));
+                        }
                         Some(&HexCell::Diff { value, source_id }) => {
                             let color = Self::color(source_id);
                             let contrast = Self::contrast(color);
-                            ui.label(
+                            let response = ui.label(
                                 RichText::new(format!("{value:02X}"))
                                     .color(contrast)
                                     .background_color(color)
                                     .monospace(),
-                            )
+                            );
+                            
+                            // Add tooltip on hover
+                            response.on_hover_text(format!(
+                                "Cell Value: 0x{:02X} ({} decimal)\nFile Address: 0x{:08X}\nComparison Address: 0x{:08X}",
+                                value, value, cell_index, cell_index
+                            ));
                         }
 
-                        Some(&HexCell::Blank) => ui.monospace("__"),
-                        None => ui.monospace("xx"),
+                        Some(&HexCell::Blank) => {
+                            let response = ui.monospace("__");
+                            response.on_hover_text("Empty cell");
+                        }
+                        None => {
+                            let response = ui.monospace("xx");
+                            response.on_hover_text("No data");
+                        }
                     };
                 });
             };
 
             let add_ascii_row = |ui: &mut Ui, diffs: &Vec<HexCell>| {
                 (0..hex_grid_width).for_each(|i| {
-                    let cell = diffs.get(i + row_index * hex_grid_width);
+                    let cell_index = i + row_index * hex_grid_width;
+                    let cell = diffs.get(cell_index);
 
                     fn clean_ascii(value: u8) -> char {
                         let ch = value as char;
@@ -490,24 +512,44 @@ impl HexApp {
                     }
 
                     match cell {
-                        Some(&HexCell::Same { value, source_id }) => ui.label(
-                            RichText::new(format!("{}", clean_ascii(value)))
-                                .color(Self::color(source_id))
-                                .monospace(),
-                        ),
+                        Some(&HexCell::Same { value, source_id }) => {
+                            let response = ui.label(
+                                RichText::new(format!("{}", clean_ascii(value)))
+                                    .color(Self::color(source_id))
+                                    .monospace(),
+                            );
+                            
+                            // Add tooltip on hover
+                            response.on_hover_text(format!(
+                                "Cell Value: 0x{:02X} ({} decimal)\nFile Address: 0x{:08X}\nComparison Address: 0x{:08X}",
+                                value, value, cell_index, cell_index
+                            ));
+                        }
                         Some(&HexCell::Diff { value, source_id }) => {
                             let color = Self::color(source_id);
                             let contrast = Self::contrast(color);
 
-                            ui.label(
+                            let response = ui.label(
                                 RichText::new(format!("{}", clean_ascii(value)))
                                     .color(contrast)
                                     .background_color(color)
                                     .monospace(),
-                            )
+                            );
+                            
+                            // Add tooltip on hover
+                            response.on_hover_text(format!(
+                                "Cell Value: 0x{:02X} ({} decimal)\nFile Address: 0x{:08X}\nComparison Address: 0x{:08X}",
+                                value, value, cell_index, cell_index
+                            ));
                         }
-                        Some(&HexCell::Blank) => ui.monospace("_"),
-                        None => ui.monospace("x"),
+                        Some(&HexCell::Blank) => {
+                            let response = ui.monospace("_");
+                            response.on_hover_text("Empty cell");
+                        }
+                        None => {
+                            let response = ui.monospace("x");
+                            response.on_hover_text("No data");
+                        }
                     };
                 });
             };
