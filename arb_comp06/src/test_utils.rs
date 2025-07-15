@@ -185,7 +185,11 @@ pub fn print_ui_01(
 }
 
 //todo: dedup w/ colored_hex?
-fn hex_cells(diff: bool, id: TokenId, decode: impl Fn(&Vec<TokenId>) -> Vec<u8>) -> Vec<HexCell> {
+pub fn hex_cells(
+    diff: bool,
+    id: TokenId,
+    decode: impl Fn(&Vec<TokenId>) -> Vec<u8>,
+) -> Vec<HexCell> {
     decode(&vec![id])
         .iter()
         .map(|&b| {
