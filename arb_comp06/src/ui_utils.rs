@@ -1,3 +1,7 @@
+use crate::matcher::Matched;
+use crate::test_utils::{hex_cells, HexCell};
+use crate::token::TokenId;
+
 pub fn matches_to_cells(
     matches: &[Matched],
     decode: impl Fn(&Vec<TokenId>) -> Vec<u8>,
