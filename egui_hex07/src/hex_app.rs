@@ -441,6 +441,12 @@ impl HexApp {
             return;
         };
 
+        let aligned_cells = if let Ok(aligned_cells) = self.aligned_cells.try_lock() {
+            aligned_cells
+        } else {
+            return;
+        };
+
         let hex_grid_width = self.hex_grid_width;
 
         let row_height = 18.0;
@@ -449,15 +455,12 @@ impl HexApp {
         body.rows(row_height, num_rows, |mut row| {
             let row_index = row.index();
 
-            let add_hex_row = |ui: &mut Ui, diffs: &Vec<HexCell>| {
+            let add_hex_row = |ui: &mut Ui, diffs: &Vec<HexCell>, aligned_cells: &Option<AlignedCells>| {
                 (0..hex_grid_width).for_each(|i| {
-                    let comparison_address = i + row_index * hex_grid_width;
-                    let cell = diffs.get(comparison_address);
+                    let aligned_address = i + row_index * hex_grid_width;
+                    let cell = diffs.get(aligned_address);
 
-                    // Calculate file address by counting non-blank cells up to this position
-                    let file_address = diffs.iter().take(comparison_address).filter(|cell| {
-                        !matches!(cell, HexCell::Blank)
-                    }).count();
+                    let file_address = 0; //temp
 
                     match cell {
                         Some(&HexCell::Same { value, source_id }) => {
@@ -466,11 +469,11 @@ impl HexApp {
                                     .color(Self::color(source_id))
                                     .monospace(),
                             );
-                            
+
                             // Add tooltip on hover
                             response.on_hover_text(format!(
-                                "Cell Value: 0x{:02X} ({} decimal)\nFile Address: 0x{:08X}\nComparison Address: 0x{:08X}",
-                                value, value, file_address, comparison_address
+                                "Cell Value: 0x{:02X} ({} decimal)\nFile Address: 0x{:08X}\n Aligned Address: 0x{:08X}",
+                                value, value, file_address, aligned_address
                             ));
                         }
                         Some(&HexCell::Diff { value, source_id }) => {
@@ -482,19 +485,19 @@ impl HexApp {
                                     .background_color(color)
                                     .monospace(),
                             );
-                            
+
                             // Add tooltip on hover
                             response.on_hover_text(format!(
-                                "Cell Value: 0x{:02X} ({} decimal)\nFile Address: 0x{:08X}\nComparison Address: 0x{:08X}",
-                                value, value, file_address, comparison_address
+                                "Cell Value: 0x{:02X} ({} decimal)\nFile Address: 0x{:08X}\n Aligned Address: 0x{:08X}",
+                                value, value, file_address, aligned_address
                             ));
                         }
 
                         Some(&HexCell::Blank) => {
                             let response = ui.monospace("__");
                             response.on_hover_text(format!(
-                                "Empty cell (alignment gap)\nComparison Address: 0x{:08X}",
-                                comparison_address
+                                "Empty cell (alignment gap)\n Aligned Address: 0x{:08X}",
+                                aligned_address
                             ));
                         }
                         None => {
@@ -505,15 +508,12 @@ impl HexApp {
                 });
             };
 
-            let add_ascii_row = |ui: &mut Ui, diffs: &Vec<HexCell>| {
+            let add_ascii_row = |ui: &mut Ui, diffs: &Vec<HexCell>, aligned_cells: &Option<AlignedCells>| {
                 (0..hex_grid_width).for_each(|i| {
-                    let comparison_address = i + row_index * hex_grid_width;
-                    let cell = diffs.get(comparison_address);
+                    let aligned_address = i + row_index * hex_grid_width;
+                    let cell = diffs.get(aligned_address);
 
-                    // Calculate file address by counting non-blank cells up to this position
-                    let file_address = diffs.iter().take(comparison_address).filter(|cell| {
-                        !matches!(cell, HexCell::Blank)
-                    }).count();
+                    let file_address = 0; //temp
 
                     fn clean_ascii(value: u8) -> char {
                         let ch = value as char;
@@ -531,11 +531,11 @@ impl HexApp {
                                     .color(Self::color(source_id))
                                     .monospace(),
                             );
-                            
+
                             // Add tooltip on hover
                             response.on_hover_text(format!(
-                                "Cell Value: 0x{:02X} ({} decimal)\nFile Address: 0x{:08X}\nComparison Address: 0x{:08X}",
-                                value, value, file_address, comparison_address
+                                "Cell Value: 0x{:02X} ({} decimal)\nFile Address: 0x{:08X}\n Aligned Address: 0x{:08X}",
+                                value, value, file_address, aligned_address
                             ));
                         }
                         Some(&HexCell::Diff { value, source_id }) => {
@@ -548,18 +548,18 @@ impl HexApp {
                                     .background_color(color)
                                     .monospace(),
                             );
-                            
+
                             // Add tooltip on hover
                             response.on_hover_text(format!(
-                                "Cell Value: 0x{:02X} ({} decimal)\nFile Address: 0x{:08X}\nComparison Address: 0x{:08X}",
-                                value, value, file_address, comparison_address
+                                "Cell Value: 0x{:02X} ({} decimal)\nFile Address: 0x{:08X}\n Aligned Address: 0x{:08X}",
+                                value, value, file_address, aligned_address
                             ));
                         }
                         Some(&HexCell::Blank) => {
                             let response = ui.monospace("_");
                             response.on_hover_text(format!(
-                                "Empty cell (alignment gap)\nComparison Address: 0x{:08X}",
-                                comparison_address
+                                "Empty cell (alignment gap)\n Aligned Address: 0x{:08X}",
+                                aligned_address
                             ));
                         }
                         None => {
@@ -573,10 +573,10 @@ impl HexApp {
             row.col(|ui| {
                 ui.label(RichText::new(format!("{:08X}", row_index * hex_grid_width)).monospace());
             });
-            row.col(|ui| add_hex_row(ui, &diffs0));
-            row.col(|ui| add_ascii_row(ui, &diffs0));
-            row.col(|ui| add_hex_row(ui, &diffs1));
-            row.col(|ui| add_ascii_row(ui, &diffs1));
+            row.col(|ui| add_hex_row(ui, &diffs0, &aligned_cells));
+            row.col(|ui| add_ascii_row(ui, &diffs0, &aligned_cells));
+            row.col(|ui| add_hex_row(ui, &diffs1, &aligned_cells));
+            row.col(|ui| add_ascii_row(ui, &diffs1, &aligned_cells));
         });
     }
 }
