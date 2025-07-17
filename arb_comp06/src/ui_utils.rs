@@ -10,20 +10,21 @@ pub struct CellAlignment {
 }
 
 impl CellAlignment {
-    fn add(&mut self, cells0_address: usize, cells1_address: usize) {
+    fn add(&mut self, cells0_block_len: usize, cells1_block_len: usize) {
+        assert!(cells0_block_len > 0);
+        assert!(cells1_block_len > 0);
+        let new_aligned_block_len = std::cmp::max(cells0_block_len, cells1_block_len);
+
         let prev_cells0_address = *self.cells0_addresses.last().unwrap_or(&0);
         let prev_cells1_address = *self.cells1_addresses.last().unwrap_or(&0);
         let prev_aligned_address = *self.aligned_addresses.last().unwrap_or(&0);
 
-        let cells0_delta = cells0_address.checked_sub(prev_cells0_address).unwrap();
-        let cells1_delta = cells1_address.checked_sub(prev_cells1_address).unwrap();
-        assert!(cells0_delta > 0);
-        assert!(cells1_delta > 0);
+        let new_cells0_address = prev_cells0_address + cells0_block_len;
+        let new_cells1_address = prev_cells1_address + cells1_block_len;
+        let new_aligned_address = prev_aligned_address + new_aligned_block_len;
 
-        let new_aligned_address = prev_aligned_address + std::cmp::max(cells0_delta, cells1_delta);
-
-        self.cells0_addresses.push(cells0_address);
-        self.cells1_addresses.push(cells1_address);
+        self.cells0_addresses.push(new_cells0_address);
+        self.cells1_addresses.push(new_cells1_address);
         self.aligned_addresses.push(new_aligned_address);
     }
 }
