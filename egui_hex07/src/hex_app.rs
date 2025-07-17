@@ -1,6 +1,8 @@
 use crate::diff::{self, HexCell};
 use crate::document_map::{DocumentMap, Ratio};
-use arb_comp06::{bpe::Bpe, matcher, re_pair::RePair, test_patterns, test_utils, ui_utils};
+use arb_comp06::{
+    bpe::Bpe, matcher, re_pair::RePair, test_patterns, test_utils, ui_utils::AlignedCells,
+};
 use egui::{Color32, ColorImage, Context, RichText, TextureHandle, TextureOptions, Ui};
 use egui_extras::{Column, TableBody, TableBuilder, TableRow};
 use rand::Rng;
@@ -38,6 +40,7 @@ pub struct HexApp {
     diffs1: Arc<Mutex<Vec<HexCell>>>,
     diffs_texture0: TextureHandle,
     diffs_texture1: TextureHandle,
+    aligned_cells: Arc<Mutex<Option<AlignedCells>>>,
     file_drop_target: WhichFile,
     diff_method: DiffMethod,
     update_new_id_rx: Option<mpsc::Receiver<usize>>,
@@ -77,6 +80,7 @@ impl HexApp {
             diffs1: Arc::new(Mutex::new(vec![])),
             diffs_texture0: texture_handle0.clone(),
             diffs_texture1: texture_handle1.clone(),
+            aligned_cells: Arc::new(Mutex::new(None)),
             file_drop_target: WhichFile::File0,
             diff_method: DiffMethod::ByIndex,
             update_new_id_rx: None,
@@ -129,6 +133,8 @@ impl HexApp {
         let mut diffs_texture0 = self.diffs_texture0.clone();
         let mut diffs_texture1 = self.diffs_texture1.clone();
 
+        let aligned_cells = self.aligned_cells.clone();
+
         let diff_method = self.diff_method;
         let hex_grid_width = self.hex_grid_width;
         let document_map_boolean_diff = self.document_map_boolean_diff;
@@ -174,6 +180,8 @@ impl HexApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 egui_context.request_repaint();
             };
+
+            let mut new_aligned_cells = None;
 
             let (new_diffs0, new_diffs1) =
                 if let (Some(pattern0), Some(pattern1)) = (&*pattern0, &*pattern1) {
@@ -223,9 +231,9 @@ impl HexApp {
                             let matches = matcher::greedy00(&pattern0, &pattern1);
 
                             let (cells0, cells1, aligned_cells) =
-                                ui_utils::AlignedCells::new(matches.clone(), |x| {
-                                    re_pair.decode(x.clone())
-                                });
+                                AlignedCells::new(matches.clone(), |x| re_pair.decode(x.clone()));
+
+                            new_aligned_cells = Some(aligned_cells);
 
                             (cells0, cells1)
                         }
@@ -233,6 +241,9 @@ impl HexApp {
                 } else {
                     (vec![], vec![])
                 };
+
+            let mut aligned_cells = aligned_cells.lock().unwrap();
+            *aligned_cells = new_aligned_cells;
 
             let columns = hex_grid_width;
             let hex_rows = std::cmp::max(new_diffs0.len(), new_diffs1.len()).div_ceil(columns);
