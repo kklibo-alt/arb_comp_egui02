@@ -1,6 +1,6 @@
 use crate::diff::{self, HexCell};
 use crate::document_map::{DocumentMap, Ratio};
-use arb_comp06::{bpe::Bpe, matcher, re_pair::RePair, test_patterns, test_utils};
+use arb_comp06::{bpe::Bpe, matcher, re_pair::RePair, test_patterns, test_utils, ui_utils};
 use egui::{Color32, ColorImage, Context, RichText, TextureHandle, TextureOptions, Ui};
 use egui_extras::{Column, TableBody, TableBuilder, TableRow};
 use rand::Rng;
@@ -221,7 +221,13 @@ impl HexApp {
                             let pattern1 = re_pair.encode(pattern1);
 
                             let matches = matcher::greedy00(&pattern0, &pattern1);
-                            test_utils::matches_to_cells(&matches, |x| re_pair.decode(x.clone()))
+
+                            let (cells0, cells1, aligned_cells) =
+                                ui_utils::AlignedCells::new(matches.clone(), |x| {
+                                    re_pair.decode(x.clone())
+                                });
+
+                            (cells0, cells1)
                         }
                     }
                 } else {

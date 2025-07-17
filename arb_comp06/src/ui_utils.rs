@@ -3,10 +3,8 @@ use crate::test_utils::{hex_cells, HexCell};
 use crate::token::TokenId;
 use rangemap::RangeMap;
 
-struct AlignedCells {
+pub struct AlignedCells {
     matches: Vec<Matched>,
-    pub cells0: Vec<HexCell>,
-    pub cells1: Vec<HexCell>,
     cells0_index_to_matches_index: RangeMap<usize, usize>,
     cells1_index_to_matches_index: RangeMap<usize, usize>,
     matches_index_to_cells0_alignment_offset: Vec<usize>,
@@ -14,7 +12,10 @@ struct AlignedCells {
 }
 
 impl AlignedCells {
-    pub fn new(matches: Vec<Matched>, decode: impl Fn(&Vec<TokenId>) -> Vec<u8>) -> Self {
+    pub fn new(
+        matches: Vec<Matched>,
+        decode: impl Fn(&Vec<TokenId>) -> Vec<u8>,
+    ) -> (Vec<HexCell>, Vec<HexCell>, Self) {
         let mut cells0 = vec![];
         let mut cells1 = vec![];
         let mut cells0_index_to_matches_index = RangeMap::new();
@@ -85,15 +86,17 @@ impl AlignedCells {
                     offset1 += padding_len1;
                 }
             });
-
-        Self {
-            matches,
+        (
             cells0,
             cells1,
-            cells0_index_to_matches_index,
-            cells1_index_to_matches_index,
-            matches_index_to_cells0_alignment_offset,
-            matches_index_to_cells1_alignment_offset,
-        }
+            Self {
+                matches,
+
+                cells0_index_to_matches_index,
+                cells1_index_to_matches_index,
+                matches_index_to_cells0_alignment_offset,
+                matches_index_to_cells1_alignment_offset,
+            },
+        )
     }
 }
