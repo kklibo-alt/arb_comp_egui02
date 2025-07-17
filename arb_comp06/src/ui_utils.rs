@@ -60,16 +60,29 @@ impl AlignedCells {
                         block_cells1.append(&mut hex_cells(true, id, &decode));
                     }
 
-                    while block_cells0.len() < block_cells1.len() {
+                    let block_len = std::cmp::max(block_cells0.len(), block_cells1.len());
+                    let padding_len0 = block_len - block_cells0.len();
+                    let padding_len1 = block_len - block_cells1.len();
+
+                    for _ in 0..padding_len0 {
                         block_cells0.push(HexCell::Blank);
                     }
 
-                    while block_cells1.len() < block_cells0.len() {
+                    for _ in 0..padding_len1 {
                         block_cells1.push(HexCell::Blank);
                     }
 
                     cells0.append(&mut block_cells0);
                     cells1.append(&mut block_cells1);
+
+                    matches_index_to_cells0_alignment_offset.push(offset0);
+                    matches_index_to_cells1_alignment_offset.push(offset1);
+
+                    index0 += block_len;
+                    index1 += block_len;
+
+                    offset0 += padding_len0;
+                    offset1 += padding_len1;
                 }
             });
 
