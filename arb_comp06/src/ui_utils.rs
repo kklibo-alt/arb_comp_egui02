@@ -37,23 +37,22 @@ pub fn matches_to_cells(
     let mut cells1 = vec![];
     let mut alignment = CellAlignment::default();
 
+    let token_ids_to_hex_cells = |ids: &[TokenId], diff: bool| -> Vec<HexCell> {
+        ids.iter()
+            .flat_map(|&id| hex_cells(diff, id, &decode))
+            .collect()
+    };
+
     matches.iter().for_each(|matched| match matched {
         Matched::Same(ids) => {
-            for &id in ids {
-                cells0.append(&mut hex_cells(false, id, &decode));
-                cells1.append(&mut hex_cells(false, id, &decode));
-            }
+            let mut new_cells = token_ids_to_hex_cells(ids, false);
+
+            cells0.append(&mut new_cells.clone());
+            cells1.append(&mut new_cells);
         }
         Matched::Diff(ids0, ids1) => {
-            let mut block_cells0 = vec![];
-            let mut block_cells1 = vec![];
-
-            for &id in ids0 {
-                block_cells0.append(&mut hex_cells(true, id, &decode));
-            }
-            for &id in ids1 {
-                block_cells1.append(&mut hex_cells(true, id, &decode));
-            }
+            let mut block_cells0 = token_ids_to_hex_cells(ids0, true);
+            let mut block_cells1 = token_ids_to_hex_cells(ids1, true);
 
             while block_cells0.len() < block_cells1.len() {
                 block_cells0.push(HexCell::Blank);
