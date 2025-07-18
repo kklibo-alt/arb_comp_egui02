@@ -46,6 +46,26 @@ pub fn random_minus_block() -> (Vec<u8>, Vec<u8>) {
     (pattern0, pattern1)
 }
 
+pub fn random_minus_l_r_l() -> (Vec<u8>, Vec<u8>) {
+    let mut pattern0 = random_block(256);
+    let mut pattern1 = pattern0.clone();
+
+    pattern0.drain(224..256);
+    pattern0.drain(0..32);
+    pattern1.drain(128..160);
+    (pattern0, pattern1)
+}
+
+pub fn random_minus_r_l_r() -> (Vec<u8>, Vec<u8>) {
+    let mut pattern0 = random_block(256);
+    let mut pattern1 = pattern0.clone();
+
+    pattern1.drain(224..256);
+    pattern1.drain(0..32);
+    pattern0.drain(128..160);
+    (pattern0, pattern1)
+}
+
 pub fn random_10k_minus_block() -> (Vec<u8>, Vec<u8>) {
     let pattern0 = random_block(10240);
     let mut pattern1 = pattern0.clone();

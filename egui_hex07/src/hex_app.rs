@@ -600,6 +600,8 @@ impl eframe::App for HexApp {
                         ("random_1k", test_patterns::random_1k),
                         ("random_256", test_patterns::random_256),
                         ("random_minus_block", test_patterns::random_minus_block),
+                        ("random_minus_l_r_l", test_patterns::random_minus_l_r_l),
+                        ("random_minus_r_l_r", test_patterns::random_minus_r_l_r),
                         ("zeroes_minus_block", test_patterns::zeroes_minus_block),
                         (
                             "random_10k_minus_block",
