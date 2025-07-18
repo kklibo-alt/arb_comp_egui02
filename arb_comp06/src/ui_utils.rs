@@ -4,6 +4,9 @@ use crate::token::TokenId;
 
 #[derive(Debug, Default)]
 pub struct CellAlignment {
+    // Aligned blocks have the same index in these Vecs.
+    // A block is specified by an address that is its exclusive upper bound.
+    // The previous block's address is its start.
     cells0_addresses: Vec<usize>,
     cells1_addresses: Vec<usize>,
     aligned_addresses: Vec<usize>,
@@ -27,6 +30,10 @@ impl CellAlignment {
         self.cells0_addresses.push(new_cells0_address);
         self.cells1_addresses.push(new_cells1_address);
         self.aligned_addresses.push(new_aligned_address);
+    }
+
+    fn get_block_index(&self, address: usize, blocks: &Vec<usize>) -> usize {
+         blocks.partition_point( |&block_start| address < block_start ) 
     }
 }
 
