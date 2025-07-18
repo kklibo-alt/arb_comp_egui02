@@ -13,6 +13,9 @@ impl CellAlignment {
     fn add(&mut self, cells0_block_len: usize, cells1_block_len: usize) {
         assert!(cells0_block_len > 0);
         assert!(cells1_block_len > 0);
+        dbg!(cells0_block_len);
+        dbg!(cells1_block_len);
+
         let new_aligned_block_len = std::cmp::max(cells0_block_len, cells1_block_len);
 
         let prev_cells0_address = *self.cells0_addresses.last().unwrap_or(&0);
@@ -32,7 +35,7 @@ impl CellAlignment {
 pub fn matches_to_cells(
     matches: &[Matched],
     decode: impl Fn(&Vec<TokenId>) -> Vec<u8>,
-) -> (Vec<HexCell>, Vec<HexCell>) {
+) -> (Vec<HexCell>, Vec<HexCell>, CellAlignment) {
     let mut cells0 = vec![];
     let mut cells1 = vec![];
     let mut alignment = CellAlignment::default();
@@ -43,9 +46,13 @@ pub fn matches_to_cells(
             .collect()
     };
 
+    dbg!(matches);
+
     matches.iter().for_each(|matched| match matched {
         Matched::Same(ids) => {
             let mut new_cells = token_ids_to_hex_cells(ids, false);
+
+            alignment.add(new_cells.len(), new_cells.len());
 
             cells0.append(&mut new_cells.clone());
             cells1.append(&mut new_cells);
@@ -62,10 +69,14 @@ pub fn matches_to_cells(
                 block_cells1.push(HexCell::Blank);
             }
 
+            alignment.add(block_cells0.len(), block_cells1.len());
+
             cells0.append(&mut block_cells0);
             cells1.append(&mut block_cells1);
         }
     });
 
-    (cells0, cells1)
+    dbg!(&alignment);
+
+    (cells0, cells1, alignment)
 }
