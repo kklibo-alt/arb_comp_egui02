@@ -2,14 +2,19 @@ use crate::matcher::Matched;
 use crate::test_utils::{hex_cells, HexCell};
 use crate::token::TokenId;
 
+#[derive(Debug, Clone, Copy, Default)]
+struct AlignedBlock {
+    in_cells0: usize,
+    in_cells1: usize,
+    in_alignment: usize,
+}
+
 #[derive(Debug, Default)]
 pub struct CellAlignment {
-    // Aligned blocks have the same index in these Vecs.
-    // A block is specified by an address that is its exclusive upper bound.
-    // The previous block's address is its start.
-    cells0_addresses: Vec<usize>,
-    cells1_addresses: Vec<usize>,
-    aligned_addresses: Vec<usize>,
+    // Within an address space,
+    // a block is specified by an address that is its exclusive upper bound.
+    // The previous block's address (or 0 for the first block) is its start.
+    aligned_blocks: Vec<AlignedBlock>,
 }
 
 impl CellAlignment {
@@ -19,21 +24,19 @@ impl CellAlignment {
 
         let new_aligned_block_len = std::cmp::max(cells0_block_len, cells1_block_len);
 
-        let prev_cells0_address = *self.cells0_addresses.last().unwrap_or(&0);
-        let prev_cells1_address = *self.cells1_addresses.last().unwrap_or(&0);
-        let prev_aligned_address = *self.aligned_addresses.last().unwrap_or(&0);
+        let prev_block = self.aligned_blocks.last().copied().unwrap_or_default();
 
-        let new_cells0_address = prev_cells0_address + cells0_block_len;
-        let new_cells1_address = prev_cells1_address + cells1_block_len;
-        let new_aligned_address = prev_aligned_address + new_aligned_block_len;
+        let new_block = AlignedBlock {
+            in_cells0: prev_block.in_cells0 + cells0_block_len,
+            in_cells1: prev_block.in_cells1 + cells1_block_len,
+            in_alignment: prev_block.in_alignment + new_aligned_block_len,
+        };
 
-        self.cells0_addresses.push(new_cells0_address);
-        self.cells1_addresses.push(new_cells1_address);
-        self.aligned_addresses.push(new_aligned_address);
+        self.aligned_blocks.push(new_block);
     }
 
     fn get_block_index(&self, address: usize, blocks: &Vec<usize>) -> usize {
-         blocks.partition_point( |&block_start| address < block_start ) 
+        blocks.partition_point(|&block_start| address < block_start)
     }
 }
 
