@@ -38,6 +38,25 @@ impl CellAlignment {
     fn get_block_index(&self, address: usize, blocks: &Vec<usize>) -> usize {
         blocks.partition_point(|&block_start| address < block_start)
     }
+
+    fn aligned_block_by_cells0_address(&self, address: usize) -> Option<AlignedBlock> {
+        let index = self
+            .aligned_blocks
+            .partition_point(|&block| address < block.in_cells0);
+        self.aligned_blocks.get(index).copied()
+    }
+    fn aligned_block_by_cells1_address(&self, address: usize) -> Option<AlignedBlock> {
+        let index = self
+            .aligned_blocks
+            .partition_point(|&block| address < block.in_cells1);
+        self.aligned_blocks.get(index).copied()
+    }
+    fn aligned_block_by_alignment_address(&self, address: usize) -> Option<AlignedBlock> {
+        let index = self
+            .aligned_blocks
+            .partition_point(|&block| address < block.in_alignment);
+        self.aligned_blocks.get(index).copied()
+    }
 }
 
 pub fn matches_to_cells(
