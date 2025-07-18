@@ -11,8 +11,6 @@ pub struct CellAlignment {
 
 impl CellAlignment {
     fn add(&mut self, cells0_block_len: usize, cells1_block_len: usize) {
-        assert!(cells0_block_len > 0);
-        assert!(cells1_block_len > 0);
         dbg!(cells0_block_len);
         dbg!(cells1_block_len);
 
@@ -61,6 +59,8 @@ pub fn matches_to_cells(
             let mut block_cells0 = token_ids_to_hex_cells(ids0, true);
             let mut block_cells1 = token_ids_to_hex_cells(ids1, true);
 
+            alignment.add(block_cells0.len(), block_cells1.len());
+
             while block_cells0.len() < block_cells1.len() {
                 block_cells0.push(HexCell::Blank);
             }
@@ -68,8 +68,6 @@ pub fn matches_to_cells(
             while block_cells1.len() < block_cells0.len() {
                 block_cells1.push(HexCell::Blank);
             }
-
-            alignment.add(block_cells0.len(), block_cells1.len());
 
             cells0.append(&mut block_cells0);
             cells1.append(&mut block_cells1);
