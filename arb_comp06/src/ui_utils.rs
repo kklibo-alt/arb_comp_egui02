@@ -3,10 +3,28 @@ use crate::test_utils::{hex_cells, HexCell};
 use crate::token::TokenId;
 
 #[derive(Debug, Clone, Copy, Default)]
-struct AlignedBlock {
+struct AlignedAddress {
     in_cells0: usize,
     in_cells1: usize,
     in_alignment: usize,
+}
+
+impl AlignedAddress {
+    // replace with real trait impl?
+    fn greater_than(&self, address: Address) -> bool {
+        match address {
+            Address::Cells0(x) => x < self.in_cells0,
+            Address::Cells1(x) => x < self.in_cells1,
+            Address::Alignment(x) => x < self.in_alignment,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Address {
+    Cells0(usize),
+    Cells1(usize),
+    Alignment(usize),
 }
 
 #[derive(Debug, Default)]
@@ -14,7 +32,7 @@ pub struct CellAlignment {
     // Within an address space,
     // a block is specified by an address that is its exclusive upper bound.
     // The previous block's address (or 0 for the first block) is its start.
-    aligned_blocks: Vec<AlignedBlock>,
+    aligned_blocks: Vec<AlignedAddress>,
 }
 
 impl CellAlignment {
@@ -26,7 +44,7 @@ impl CellAlignment {
 
         let prev_block = self.aligned_blocks.last().copied().unwrap_or_default();
 
-        let new_block = AlignedBlock {
+        let new_block = AlignedAddress {
             in_cells0: prev_block.in_cells0 + cells0_block_len,
             in_cells1: prev_block.in_cells1 + cells1_block_len,
             in_alignment: prev_block.in_alignment + new_aligned_block_len,
@@ -39,22 +57,10 @@ impl CellAlignment {
         blocks.partition_point(|&block_start| address < block_start)
     }
 
-    fn aligned_block_by_cells0_address(&self, address: usize) -> Option<AlignedBlock> {
+    fn aligned_address(&self, address: Address) -> Option<AlignedAddress> {
         let index = self
             .aligned_blocks
-            .partition_point(|&block| address < block.in_cells0);
-        self.aligned_blocks.get(index).copied()
-    }
-    fn aligned_block_by_cells1_address(&self, address: usize) -> Option<AlignedBlock> {
-        let index = self
-            .aligned_blocks
-            .partition_point(|&block| address < block.in_cells1);
-        self.aligned_blocks.get(index).copied()
-    }
-    fn aligned_block_by_alignment_address(&self, address: usize) -> Option<AlignedBlock> {
-        let index = self
-            .aligned_blocks
-            .partition_point(|&block| address < block.in_alignment);
+            .partition_point(|block| block.greater_than(address));
         self.aligned_blocks.get(index).copied()
     }
 }
