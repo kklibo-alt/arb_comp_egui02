@@ -18,6 +18,29 @@ impl AlignedAddress {
             Address::Alignment(x) => x < self.in_alignment,
         }
     }
+
+    fn offset_to(&self, address: Address) -> Offset {
+        match address {
+            Address::Cells0(x) => Offset::new(self.in_cells0, x),
+            Address::Cells1(x) => Offset::new(self.in_cells1, x),
+            Address::Alignment(x) => Offset::new(self.in_alignment, x),
+        }
+    }
+
+    fn apply(&self, offset: Offset) -> Option<Self> {
+        match offset {
+            Offset::Increase(x) => Some(Self {
+                in_cells0: self.in_cells0.checked_add(x)?,
+                in_cells1: self.in_cells1.checked_add(x)?,
+                in_alignment: self.in_alignment.checked_add(x)?,
+            }),
+            Offset::Decrease(x) => Some(Self {
+                in_cells0: self.in_cells0.checked_sub(x)?,
+                in_cells1: self.in_cells1.checked_sub(x)?,
+                in_alignment: self.in_alignment.checked_sub(x)?,
+            }),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -25,6 +48,22 @@ enum Address {
     Cells0(usize),
     Cells1(usize),
     Alignment(usize),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Offset {
+    Increase(usize),
+    Decrease(usize),
+}
+
+impl Offset {
+    fn new(from: usize, to: usize) -> Self {
+        if from < to {
+            Self::Increase(to - from)
+        } else {
+            Self::Decrease(from - to)
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -61,7 +100,9 @@ impl CellAlignment {
         let index = self
             .aligned_blocks
             .partition_point(|block| block.greater_than(address));
-        self.aligned_blocks.get(index).copied()
+        self.aligned_blocks
+            .get(index)
+            .and_then(|x| x.apply(x.offset_to(address)))
     }
 }
 
